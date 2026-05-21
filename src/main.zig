@@ -1,71 +1,117 @@
 const std = @import("std");
-const Io = std.Io;
+const zap = @import("zap");
 
-const Iridoporth_backend = @import("Iridoporth_backend");
+const Allocator = std.mem.Allocator;
+const assert = std.debug.assert;
 
-pub fn main(init: std.process.Init) !void {
-    // Prints to stderr, unbuffered, ignoring potential errors.
-    std.debug.print("All your {s} are belong to us.\n", .{"codebase"});
+const Context = struct {
+    raspi: union(enum) {
+        not_available: void,
+        name: []const u8,
+    },
 
-    // This is appropriate for anything that lives as long as the process.
-    const arena: std.mem.Allocator = init.arena.allocator();
-
-    // Accessing command line arguments:
-    const args = try init.minimal.args.toSlice(arena);
-    for (args) |arg| {
-        std.log.info("arg: {s}", .{arg});
+    pub fn unhandledRequest(_: *Context, _: Allocator, r: zap.Request) anyerror!void {
+        r.setStatus(.not_found);
+        try r.sendBody("Not Found");
     }
 
-    // In order to do I/O operations need an `Io` instance.
-    const io = init.io;
+    pub fn unhandledError(_: *Context, r: zap.Request, err: anyerror) void {
+        std.debug.print("Unhandled error: {}\n", .{err});
+        r.setStatus(.internal_server_error);
+        r.sendBody("Internal Server Error") catch {};
+    }
+};
 
-    // Stdout is for the actual output of your application, for example if you
-    // are implementing gzip, then only the compressed bytes should be sent to
-    // stdout, not any debugging messages.
-    var stdout_buffer: [1024]u8 = undefined;
-    var stdout_file_writer: Io.File.Writer = .init(.stdout(), io, &stdout_buffer);
-    const stdout_writer = &stdout_file_writer.interface;
+const RaspiStatus = struct {
+    cpu_temperature: f32,
+    cpu_usage: f32,
+    memory_usage: f32,
+};
 
-    try Iridoporth_backend.printAnotherMessage(stdout_writer);
-
-    try stdout_writer.flush(); // Don't forget to flush!
-}
-
-test "simple test" {
-    const gpa = std.testing.allocator;
-    var list: std.ArrayList(i32) = .empty;
-    defer list.deinit(gpa); // Try commenting this out and see if zig detects the memory leak!
-    try list.append(gpa, 42);
-    try std.testing.expectEqual(@as(i32, 42), list.pop());
-}
-
-test "fuzz example" {
-    try std.testing.fuzz({}, testOne, .{});
-}
-
-fn testOne(context: void, smith: *std.testing.Smith) !void {
-    _ = context;
-    // Try passing `--fuzz` to `zig build test` and see if it manages to fail this test case!
-
-    const gpa = std.testing.allocator;
-    var list: std.ArrayList(u8) = .empty;
-    defer list.deinit(gpa);
-    while (!smith.eos()) switch (smith.value(enum { add_data, dup_data })) {
-        .add_data => {
-            const slice = try list.addManyAsSlice(gpa, smith.value(u4));
-            smith.bytes(slice);
-        },
-        .dup_data => {
-            if (list.items.len == 0) continue;
-            if (list.items.len > std.math.maxInt(u32)) return error.SkipZigTest;
-            const len = smith.valueRangeAtMost(u32, 1, @min(32, list.items.len));
-            const off = smith.valueRangeAtMost(u32, 0, @intCast(list.items.len - len));
-            try list.appendSlice(gpa, list.items[off..][0..len]);
-            try std.testing.expectEqualSlices(
-                u8,
-                list.items[off..][0..len],
-                list.items[list.items.len - len ..],
-            );
-        },
+fn getRaspiStatus() !RaspiStatus {
+    // TODO: Implement actual logic to get Raspi status.
+    return .{
+        .cpu_temperature = 55.0,
+        .cpu_usage = 30.0,
+        .memory_usage = 40.0,
     };
+}
+
+const DeviceStatusEndpoint = struct {
+    path: []const u8 = "/api/v1/device/status",
+    error_strategy: zap.Endpoint.ErrorStrategy = .raise,
+
+    pub fn get(_: *DeviceStatusEndpoint, arena: Allocator, ctx: *Context, r: zap.Request) !void {
+        const DeviceStatusResponse = struct { ok: bool = true, data: struct {
+            available: bool,
+            name: ?[]const u8,
+            cpu_temperature: ?f32 = null,
+            cpu_usage: ?f32 = null,
+            memory_usage: ?f32 = null,
+        } };
+
+        try r.setHeader("Content-Type", "application/json");
+
+        const available: bool, const name: ?[]const u8 = switch (ctx.raspi) {
+            .not_available => .{ false, null },
+            .name => |name| .{ true, name },
+        };
+
+        const response: DeviceStatusResponse = if (available) response: {
+            const status = try getRaspiStatus();
+            break :response DeviceStatusResponse{
+                .ok = true,
+                .data = .{
+                    .available = true,
+                    .name = name,
+                    .cpu_temperature = status.cpu_temperature,
+                    .cpu_usage = status.cpu_usage,
+                    .memory_usage = status.memory_usage,
+                },
+            };
+        } else DeviceStatusResponse{
+            .ok = false,
+            .data = .{
+                .available = false,
+                .name = null,
+            },
+        };
+
+        const body = try std.json.Stringify.valueAlloc(arena, response, .{});
+        try r.sendBody(body);
+    }
+};
+
+pub fn main() !void {
+    var gpa: std.heap.DebugAllocator(.{
+        .thread_safe = true,
+    }) = .init;
+    defer _ = assert(gpa.deinit() == .ok);
+
+    const allocator = gpa.allocator();
+
+    // TODO: Detect real status of the running server.
+    var app_context = Context{
+        .raspi = .{ .name = "Raspberry Pi" },
+    };
+
+    const App = zap.App.Create(Context);
+    try App.init(allocator, &app_context, .{
+        .default_error_strategy = .log_to_response,
+    });
+    defer App.deinit();
+
+    var deviceStatusEndpoint = DeviceStatusEndpoint{};
+    try App.register(&deviceStatusEndpoint);
+
+    try App.listen(.{
+        .interface = "0.0.0.0",
+        .port = 3000,
+        .public_folder = "../Iridoporth-frontend/dist",
+    });
+
+    zap.start(.{
+        .threads = 2,
+        .workers = 1,
+    });
 }
