@@ -82,7 +82,7 @@ const DeviceStatusEndpoint = struct {
     }
 };
 
-pub fn main() !void {
+pub fn main(init: std.process.Init) !void {
     var gpa: std.heap.DebugAllocator(.{
         .thread_safe = true,
     }) = .init;
@@ -90,6 +90,7 @@ pub fn main() !void {
 
     const allocator = gpa.allocator();
 
+    const public_folder = init.environ_map.get("IRIDOPORTH_PUBLIC_DIR") orelse "zig-out/static";
     // TODO: Detect real status of the running server.
     var app_context = Context{
         .raspi = .{ .name = "Raspberry Pi" },
@@ -107,7 +108,7 @@ pub fn main() !void {
     try App.listen(.{
         .interface = "0.0.0.0",
         .port = 3000,
-        .public_folder = "../Iridoporth-frontend/dist",
+        .public_folder = public_folder,
     });
 
     zap.start(.{
