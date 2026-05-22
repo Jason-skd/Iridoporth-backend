@@ -37,9 +37,11 @@ fn getRaspiStatus() !RaspiStatus {
     };
 }
 
+const device_status_endpoint = "/api/v1/device/status";
+
 const DeviceStatusEndpoint = struct {
-    path: []const u8 = "/api/v1/device/status",
-    error_strategy: zap.Endpoint.ErrorStrategy = .raise,
+    path: []const u8 = device_status_endpoint,
+    error_strategy: zap.Endpoint.ErrorStrategy = .log_to_console,
 
     pub fn get(_: *DeviceStatusEndpoint, arena: Allocator, ctx: *Context, r: zap.Request) !void {
         const DeviceStatusResponse = struct { ok: bool = true, data: struct {
@@ -50,7 +52,7 @@ const DeviceStatusEndpoint = struct {
             memory_usage: ?f32 = null,
         } };
 
-        try r.setHeader("Content-Type", "application/json");
+        r.setHeader("Content-Type", "application/json") catch {};
 
         const available: bool, const name: ?[]const u8 = switch (ctx.raspi) {
             .not_available => .{ false, null },
@@ -70,7 +72,7 @@ const DeviceStatusEndpoint = struct {
                 },
             };
         } else DeviceStatusResponse{
-            .ok = false,
+            .ok = true,
             .data = .{
                 .available = false,
                 .name = null,
