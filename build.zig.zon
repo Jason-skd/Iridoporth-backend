@@ -4,7 +4,7 @@
     .fingerprint = 0xa3c6f4860e169a1e,
     .dependencies = .{
         .zap = .{
-            .path = "../zap",
+            .path = "./zig-pkg/zap",
         },
     },
     .paths = .{
