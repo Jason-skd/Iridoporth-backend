@@ -117,6 +117,10 @@ fn readCpuTimes(io: std.Io, buffer: []u8) !CpuTimes {
 
 fn calcCpuUsage(prev: CpuTimes, now: CpuTimes) f32 {
     const total_delta = now.total - prev.total;
+    if (total_delta == 0) {
+        return 0.0;
+    }
+
     const idle_delta = if (now.idle >= prev.idle) now.idle - prev.idle else 0;
 
     return @as(f32, @floatFromInt(total_delta - idle_delta)) * 100.0 / @as(f32, @floatFromInt(total_delta));
@@ -127,7 +131,7 @@ fn statusSamplingWorker(ctx: *Context, io: std.Io) !void {
     var prev_cpu_times = try readCpuTimes(io, temp_buffer[0..]);
 
     while (true) {
-        io.sleep(.fromMilliseconds(100), .awake) catch {};
+        io.sleep(.fromSeconds(1), .awake) catch {};
 
         const cpu_temperature = try getCpuTemperature(io, temp_buffer[0..]);
 
