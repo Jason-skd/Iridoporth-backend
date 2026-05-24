@@ -18,7 +18,9 @@ pub fn main(init: std.process.Init) !void {
     defer _ = assert(gpa.deinit() == .ok);
     const gpa_allocator = gpa.allocator();
 
-    const public_folder = init.environ_map.get("IRIDOPORTH_PUBLIC_DIR") orelse "zig-out/static";
+    const public_folder = init.environ_map.get("IRIDOPORTH_PUBLIC_DIR");
+    const port_text = init.environ_map.get("IRIDOPORTH_PORT") orelse "3000";
+    const port = std.fmt.parseInt(usize, port_text, 10) catch 3000;
 
     var app_context = Context.init(init.io);
     Context.setInstance(&app_context);
@@ -41,7 +43,7 @@ pub fn main(init: std.process.Init) !void {
 
     try App.listen(.{
         .interface = "0.0.0.0",
-        .port = 3000,
+        .port = port,
         .public_folder = public_folder,
     });
 

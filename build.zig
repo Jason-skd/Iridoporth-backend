@@ -24,34 +24,9 @@ pub fn build(b: *std.Build) void {
 
     b.installArtifact(exe);
 
-    // build frontend
-    const frontend_dir = b.path("../Iridoporth-frontend");
-    const frontend_build = b.addSystemCommand(&.{
-        "npm",
-        "run",
-        "build",
-    });
-    frontend_build.setCwd(frontend_dir);
-
-    const frontend_step = b.step("forntend", "Build the frontend");
-    frontend_step.dependOn(&frontend_build.step);
-
-    const install_frontend = b.addInstallDirectory(.{
-        .source_dir = b.path("../Iridoporth-frontend/dist"),
-        .install_dir = .prefix,
-        .install_subdir = "static",
-    });
-    install_frontend.step.dependOn(&frontend_build.step);
-
-    b.getInstallStep().dependOn(&install_frontend.step);
-
     const run_step = b.step("run", "Run the app");
 
     const run_cmd = b.addRunArtifact(exe);
-    run_cmd.setEnvironmentVariable(
-        "IRIDOPORTH_PUBLIC_DIR",
-        b.getInstallPath(.prefix, "static"),
-    );
     run_step.dependOn(&run_cmd.step);
 
     run_cmd.step.dependOn(b.getInstallStep());
