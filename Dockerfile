@@ -1,3 +1,4 @@
+# for CI/CD to use registry zig builder image
 ARG ZIG_BUILDER_IMAGE=local/zig:0.17
 FROM ${ZIG_BUILDER_IMAGE} AS builder
 

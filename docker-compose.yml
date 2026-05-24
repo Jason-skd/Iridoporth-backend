@@ -3,6 +3,8 @@ services:
     build:
       context: .
       dockerfile: Dockerfile
+      args:
+        ZIG_BUILD_TARGET: aarch64-linux-gnu # modify this if not building on raspi/macos
     image: iridoporth-backend:dev
     environment:
       IRIDOPORTH_PORT: 3000

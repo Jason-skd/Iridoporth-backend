@@ -58,6 +58,7 @@ jobs:
           file: Dockerfile
           build-args: |
             ZIG_BUILDER_IMAGE=${{ env.ZIG_IMAGE_NAME }}:0.17
+            ZIG_BUILD_TARGET=aarch64-linux-gnu
           push: true
           tags: ${{ steps.meta.outputs.tags }}
           labels: ${{ steps.meta.outputs.labels }}
