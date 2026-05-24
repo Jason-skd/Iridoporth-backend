@@ -1,4 +1,5 @@
-FROM local/zig:0.17 AS builder
+ARG ZIG_BUILDER_IMAGE=local/zig:0.17
+FROM ${ZIG_BUILDER_IMAGE} AS builder
 
 WORKDIR /app
 
