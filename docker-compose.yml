@@ -1,0 +1,22 @@
+services:
+  backend:
+    build:
+      context: .
+      dockerfile: Dockerfile
+    image: iridoporth-backend:dev
+    environment:
+      IRIDOPORTH_PORT: 3000
+    expose:
+      - "3000"
+    restart: unless-stopped
+
+  frontend:
+    build:
+      context: ../Iridoporth-frontend
+      dockerfile: Dockerfile
+    image: iridoporth-frontend:dev
+    ports:
+      - "8080:80"
+    depends_on:
+      - backend
+    restart: unless-stopped
