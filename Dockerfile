@@ -3,11 +3,13 @@ FROM ${ZIG_BUILDER_IMAGE} AS builder
 
 WORKDIR /app
 
+ARG ZIG_BUILD_TARGET=aarch64-linux-gnu
+
 COPY build.zig build.zig.zon ./
 COPY src ./src
 COPY zig-pkg ./zig-pkg
 
-RUN zig build -Doptimize=ReleaseSafe
+RUN zig build -Dtarget=${ZIG_BUILD_TARGET} -Doptimize=ReleaseSafe
 
 FROM debian:bookworm-slim AS runtime
 

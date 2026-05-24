@@ -1,0 +1,19 @@
+# This config is only for production environment (raspi)
+services:
+  backend:
+    image: ghcr.io/jason-skd/iridoporth-backend:latest
+    environment:
+      - IRIDOPORTH_PORT="3000"
+    volumes:
+      - /sys/class/thermal:/sys/class/thermal:ro
+    expose:
+      - "3000"
+    restart: unless-stopped
+
+  frontend:
+    image: ghcr.io/jason-skd/iridoporth-frontend:latest
+    ports:
+      - "8080:80"
+    depends_on:
+      - backend
+    restart: unless-stopped
