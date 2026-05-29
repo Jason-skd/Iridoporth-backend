@@ -4,8 +4,7 @@ const zap = @import("zap");
 const Allocator = std.mem.Allocator;
 const assert = std.debug.assert;
 
-const raspi_status_endpoint = @import("endpoints/raspi_status.zig");
-const RaspiStatusEndpoint = raspi_status_endpoint.RaspiStatusEndpoint;
+const RaspiStatusEndpoint = @import("endpoints/raspi_status.zig");
 
 const raspi_service = @import("services/raspi.zig");
 
