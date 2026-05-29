@@ -10,6 +10,12 @@ pub fn build(b: *std.Build) void {
     });
     const zap = zap_dep.module("zap");
 
+    const sqlite_dep = b.dependency("sqlite", .{
+        .target = target,
+        .optimize = optimize,
+    });
+    const sqlite = sqlite_dep.module("sqlite");
+
     const exe = b.addExecutable(.{
         .name = "Iridoporth_backend",
         .root_module = b.createModule(.{
@@ -18,6 +24,7 @@ pub fn build(b: *std.Build) void {
             .optimize = optimize,
             .imports = &.{
                 .{ .name = "zap", .module = zap },
+                .{ .name = "sqlite", .module = sqlite },
             },
         }),
     });
