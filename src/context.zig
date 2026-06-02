@@ -7,26 +7,24 @@ const zap = @import("zap");
 const raspi_service = @import("services/raspi.zig");
 const Raspi = raspi_service.Raspi;
 
+const sqlite_db = @import("db/sqlite.zig");
+const Database = sqlite_db.Database;
+
 const Context = @This();
 
-var _instance: *Context = undefined;
-
-pub fn init(io: std.Io) Context {
+pub fn init(io: std.Io, db_path: [:0]const u8) !Context {
     return .{
         .raspi = raspi_service.init(io),
+        .db = try Database.init(db_path),
     };
 }
 
 pub fn deinit(self: *Context) void {
-    _ = self;
-    _instance = undefined;
-}
-
-pub fn setInstance(ctx: *Context) void {
-    _instance = ctx;
+    self.db.deinit();
 }
 
 raspi: Raspi,
+db: Database,
 
 pub fn unhandledRequest(_: *Context, _: Allocator, r: zap.Request) anyerror!void {
     r.setStatus(.not_found);
