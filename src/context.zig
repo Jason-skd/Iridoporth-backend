@@ -10,7 +10,7 @@ const Raspi = raspi_service.Raspi;
 const sqlite_db = @import("db/sqlite.zig");
 const Database = sqlite_db.Database;
 
-const Context = @This();
+pub const Context = @This();
 
 pub fn init(io: std.Io, db_path: [:0]const u8) !Context {
     return .{

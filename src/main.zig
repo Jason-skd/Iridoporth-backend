@@ -10,44 +10,80 @@ const raspi_service = @import("services/raspi.zig");
 
 const Context = @import("context.zig");
 
+const App = zap.App.Create(Context);
+
 pub fn main(init: std.process.Init) !void {
     var gpa: std.heap.DebugAllocator(.{
         .thread_safe = true,
     }) = .init;
-    defer _ = assert(gpa.deinit() == .ok);
+    defer assert(gpa.deinit() == .ok);
     const gpa_allocator = gpa.allocator();
 
-    const public_folder = init.environ_map.get("IRIDOPORTH_PUBLIC_DIR");
-    const port_text = init.environ_map.get("IRIDOPORTH_PORT") orelse "3000";
-    const port = std.fmt.parseInt(usize, port_text, 10) catch 3000;
+    const config = try loadConfig(init);
 
-    const db_path = init.environ_map.get("IRIDOPORTH_DB_PATH") orelse "./data/iridoporth.db";
-    const db_path_sentinel = try gpa_allocator.dupeSentinel(u8, db_path, 0);
-    errdefer gpa_allocator.free(db_path_sentinel);
-
-    var app_context = try Context.init(init.io, db_path_sentinel);
-    gpa_allocator.free(db_path_sentinel);
+    var app_context = try initContext(gpa_allocator, init.io, config.db_path);
     defer app_context.deinit();
 
-    const sampler_thread = try std.Thread.spawn(.{}, raspi_service.statusSampler, .{
-        &app_context,
-        init.io,
-    });
-    sampler_thread.detach();
+    try startDetachedStatusSampler(&app_context, init.io);
 
-    const App = zap.App.Create(Context);
     try App.init(gpa_allocator, &app_context, .{
         .default_error_strategy = .log_to_response,
     });
     defer App.deinit();
 
-    var raspiStatusEndpoint = RaspiStatusEndpoint{};
-    try App.register(&raspiStatusEndpoint);
+    var endpoints = Endpoints{};
+    try endpoints.register();
 
+    try listenAndRun(config);
+}
+
+const Config = struct {
+    public_folder: ?[]const u8,
+    port: usize,
+    db_path: []const u8,
+};
+
+fn loadConfig(init: std.process.Init) !Config {
+    const public_folder = init.environ_map.get("IRIDOPORTH_PUBLIC_DIR");
+    const port_text = init.environ_map.get("IRIDOPORTH_PORT") orelse "3000";
+    const port = try std.fmt.parseInt(usize, port_text, 10);
+    const db_path = init.environ_map.get("IRIDOPORTH_DB_PATH") orelse "./data/iridoporth.db";
+
+    return .{
+        .public_folder = public_folder,
+        .port = port,
+        .db_path = db_path,
+    };
+}
+
+fn initContext(allocator: Allocator, io: std.Io, db_path: []const u8) !Context {
+    const db_path_sentinel = try allocator.dupeSentinel(u8, db_path, 0);
+    defer allocator.free(db_path_sentinel);
+
+    return try Context.init(io, db_path_sentinel);
+}
+
+fn startDetachedStatusSampler(ctx: *Context, io: std.Io) !void {
+    const sampler_thread = try std.Thread.spawn(.{}, raspi_service.statusSampler, .{
+        ctx,
+        io,
+    });
+    sampler_thread.detach();
+}
+
+const Endpoints = struct {
+    raspi_status: RaspiStatusEndpoint = .{},
+
+    fn register(self: *Endpoints) !void {
+        try App.register(&self.raspi_status);
+    }
+};
+
+fn listenAndRun(config: Config) !void {
     try App.listen(.{
         .interface = "0.0.0.0",
-        .port = port,
-        .public_folder = public_folder,
+        .port = config.port,
+        .public_folder = config.public_folder,
     });
 
     zap.start(.{
