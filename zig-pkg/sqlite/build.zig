@@ -138,6 +138,18 @@ fn makeSQLiteLib(b: *std.Build, dep: *std.Build.Dependency, c_flags: []const []c
     return lib;
 }
 
+fn makeSQLiteCModule(b: *std.Build, dep: *std.Build.Dependency, target: std.Build.ResolvedTarget, optimize: std.builtin.OptimizeMode, root_source_file: std.Build.LazyPath) *std.Build.Module {
+    const translate_c = b.addTranslateC(.{
+        .root_source_file = root_source_file,
+        .target = target,
+        .optimize = optimize,
+        .link_libc = true,
+    });
+    translate_c.addIncludePath(b.path("c"));
+    translate_c.addIncludePath(dep.path("."));
+    return translate_c.createModule();
+}
+
 pub fn build(b: *std.Build) !void {
     const in_memory = b.option(bool, "in_memory", "Should the tests run with sqlite in memory (default true)") orelse true;
     const dbfile = b.option([]const u8, "dbfile", "Always use this database file instead of a temporary one");
@@ -177,14 +189,17 @@ pub fn build(b: *std.Build) !void {
     // Main library and module
     //
 
-    // const sqlite_lib, const sqlite_mod = blk: {
     const sqlite_lib, _ = blk: {
         const lib = makeSQLiteLib(b, sqlite_dep, c_flags, target, optimize, .with);
+        const sqlite_c_mod = makeSQLiteCModule(b, sqlite_dep, target, optimize, b.path("c/sqlite_import.h"));
+        const sqlite_ext_c_mod = makeSQLiteCModule(b, sqlite_dep, target, optimize, b.path("c/loadable_extension_import.h"));
 
         const mod = b.addModule("sqlite", .{
             .root_source_file = b.path("sqlite.zig"),
             .link_libc = true,
         });
+        mod.addImport("sqlite_c", sqlite_c_mod);
+        mod.addImport("sqlite_ext_c", sqlite_ext_c_mod);
         mod.addIncludePath(b.path("c"));
         mod.addIncludePath(sqlite_dep.path("."));
         mod.linkLibrary(lib);
@@ -193,14 +208,17 @@ pub fn build(b: *std.Build) !void {
     };
     b.installArtifact(sqlite_lib);
 
-    // const sqliteext_mod = blk: {
     _ = blk: {
         const lib = makeSQLiteLib(b, sqlite_dep, c_flags, target, optimize, .without);
+        const sqlite_c_mod = makeSQLiteCModule(b, sqlite_dep, target, optimize, b.path("c/sqlite_import.h"));
+        const sqlite_ext_c_mod = makeSQLiteCModule(b, sqlite_dep, target, optimize, b.path("c/loadable_extension_import.h"));
 
         const mod = b.addModule("sqliteext", .{
             .root_source_file = b.path("sqlite.zig"),
             .link_libc = true,
         });
+        mod.addImport("sqlite_c", sqlite_c_mod);
+        mod.addImport("sqlite_ext_c", sqlite_ext_c_mod);
         mod.addIncludePath(b.path("c"));
         mod.linkLibrary(lib);
 
@@ -238,6 +256,10 @@ pub fn build(b: *std.Build) !void {
             .root_source_file = b.path("sqlite.zig"),
             .single_threaded = test_target.single_threaded,
         });
+        const test_sqlite_c_mod = makeSQLiteCModule(b, sqlite_dep, cross_target, optimize, b.path("c/sqlite_import.h"));
+        const test_sqlite_ext_c_mod = makeSQLiteCModule(b, sqlite_dep, cross_target, optimize, b.path("c/loadable_extension_import.h"));
+        mod.addImport("sqlite_c", test_sqlite_c_mod);
+        mod.addImport("sqlite_ext_c", test_sqlite_ext_c_mod);
         mod.addIncludePath(b.path("c"));
         mod.addIncludePath(sqlite_dep.path("."));
         mod.linkLibrary(test_sqlite_lib);
