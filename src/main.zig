@@ -21,8 +21,12 @@ pub fn main(init: std.process.Init) !void {
     const port_text = init.environ_map.get("IRIDOPORTH_PORT") orelse "3000";
     const port = std.fmt.parseInt(usize, port_text, 10) catch 3000;
 
-    var app_context = Context.init(init.io);
-    Context.setInstance(&app_context);
+    const db_path = init.environ_map.get("IRIDOPORTH_DB_PATH") orelse "./data/iridoporth.db";
+    const db_path_sentinel = try gpa_allocator.dupeSentinel(u8, db_path, 0);
+    errdefer gpa_allocator.free(db_path_sentinel);
+
+    var app_context = try Context.init(init.io, db_path_sentinel);
+    gpa_allocator.free(db_path_sentinel);
     defer app_context.deinit();
 
     const sampler_thread = try std.Thread.spawn(.{}, raspi_service.statusSampler, .{
