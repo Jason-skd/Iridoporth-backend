@@ -58,8 +58,8 @@ Temporary Items
 
 .zig-cache/
 zig-out/
-build/
-build-*/
+/build/
+/build-*/
 docgen_tmp/
 
 # End of https://www.toptal.com/developers/gitignore/api/macos,visualstudiocode,zig
