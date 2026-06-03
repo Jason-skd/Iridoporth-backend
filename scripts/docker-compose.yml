@@ -4,10 +4,21 @@ services:
     image: ghcr.io/jason-skd/iridoporth-backend:latest
     environment:
       - IRIDOPORTH_PORT="3000"
+      - IRIDOPORTH_DB_PATH="/var/lib/iridoporth/iridoporth.db"
     volumes:
       - /sys/class/thermal:/sys/class/thermal:ro
+      - iridoporth-db:/var/lib/iridoporth
     expose:
       - "3000"
+    depends_on:
+      - db
+    restart: unless-stopped
+  db:
+    image: alpine:3.19
+    container_name: iridoporth-db
+    command: [ "sh", "-c", "mkdir -p /var/lib/iridoporth && touch /var/lib/iridoporth/iridoporth.db && chmod 666 /var/lib/iridoporth/iridoporth.db && sleep infinity" ]
+    volumes:
+      - iridoporth-db:/var/lib/iridoporth
     restart: unless-stopped
 
   frontend:
@@ -17,3 +28,6 @@ services:
     depends_on:
       - backend
     restart: unless-stopped
+
+volumes:
+  iridoporth-db:

@@ -23,8 +23,11 @@ WORKDIR /app
 
 COPY --from=builder /app/zig-out/bin/Iridoporth_backend /app/Iridoporth_backend
 
-ENV IRIDOPORTH_PORT=3000
+ENV IRIDOPORTH_PORT=3000 \
+    IRIDOPORTH_DB_PATH=/var/lib/iridoporth/iridoporth.db
 
 EXPOSE 3000
+
+VOLUME ["/var/lib/iridoporth"]
 
 CMD ["/app/Iridoporth_backend"]
