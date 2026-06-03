@@ -131,6 +131,7 @@ fn readCpuTimes(io: std.Io, buffer: []u8) !CpuTimes {
 }
 
 fn calcCpuUsage(prev: CpuTimes, now: CpuTimes) f32 {
+    // TODO: whether to use Io.Clock?
     const total_delta = now.total - prev.total;
     if (total_delta == 0) {
         return 0.0;

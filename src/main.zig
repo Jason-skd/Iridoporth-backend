@@ -1,10 +1,11 @@
 const std = @import("std");
-const zap = @import("zap");
-
 const Allocator = std.mem.Allocator;
 const assert = std.debug.assert;
 
+const zap = @import("zap");
+
 const RaspiStatusEndpoint = @import("endpoints/raspi_status.zig");
+const FlightLogEndpoint = @import("endpoints/flight_log.zig");
 
 const raspi_service = @import("services/raspi.zig");
 
@@ -73,9 +74,11 @@ fn startDetachedStatusSampler(ctx: *Context, io: std.Io) !void {
 
 const Endpoints = struct {
     raspi_status: RaspiStatusEndpoint = .{},
+    flight_log: FlightLogEndpoint = .{},
 
     fn register(self: *Endpoints) !void {
         try App.register(&self.raspi_status);
+        try App.register(&self.flight_log);
     }
 };
 
