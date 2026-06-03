@@ -1,36 +1,28 @@
 const std = @import("std");
+
 const sqlite = @import("sqlite");
+const Db = sqlite.Db;
 
 const Allocator = std.mem.Allocator;
 
 const current_schema_version = 1;
 
-pub const Database = struct {
-    db: sqlite.Db,
+pub fn init(path: [:0]const u8) !Db {
+    var db = try sqlite.Db.init(.{
+        .mode = .{ .File = path },
+        .open_flags = .{
+            .write = true,
+            .create = true,
+        },
+        .threading_mode = .Serialized,
+    });
+    errdefer db.deinit();
 
-    pub fn init(path: [:0]const u8) !Database {
-        var db = try sqlite.Db.init(.{
-            .mode = .{ .File = path },
-            .open_flags = .{
-                .write = true,
-                .create = true,
-            },
-            .threading_mode = .Serialized,
-        });
-        errdefer db.deinit();
+    try applyPragmas(&db);
+    try migrate(&db);
 
-        try applyPragmas(&db);
-        try migrate(&db);
-
-        return .{
-            .db = db,
-        };
-    }
-
-    pub fn deinit(self: *Database) void {
-        self.db.deinit();
-    }
-};
+    return db;
+}
 
 fn applyPragmas(db: *sqlite.Db) !void {
     _ = try db.pragma([128:0]u8, .{}, "journal_mode", "wal");
