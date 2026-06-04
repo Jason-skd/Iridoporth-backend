@@ -179,12 +179,11 @@ fn fiobjectify(
         .@"enum" => {
             return fio.fiobj_num_new_bignum(@intFromEnum(value));
         },
-        .@"union" => {
-            const info = @typeInfo(T).Union;
+        .@"union" => |info| {
             if (info.tag_type) |UnionTagType| {
-                inline for (info.fields) |u_field| {
-                    if (value == @field(UnionTagType, u_field.name)) {
-                        return fiobjectify(@field(value, u_field.name));
+                inline for (info.field_names) |field_name| {
+                    if (value == @field(UnionTagType, field_name)) {
+                        return fiobjectify(@field(value, field_name));
                     }
                 }
             } else {
@@ -194,12 +193,12 @@ fn fiobjectify(
         .@"struct" => |S| {
             // create a new fio hashmap
             const m = fio.fiobj_hash_new();
-            inline for (S.fields) |Field| {
+            inline for (S.field_names, S.field_types) |field_name, field_type| {
                 // don't include void fields
-                if (Field.type == void) continue;
+                if (field_type == void) continue;
 
-                const fname = fio.fiobj_str_new(util.toCharPtr(Field.name), Field.name.len);
-                const v = @field(value, Field.name);
+                const fname = fio.fiobj_str_new(util.toCharPtr(field_name), field_name.len);
+                const v = @field(value, field_name);
                 const fvalue = fiobjectify(v);
                 _ = fio.fiobj_hash_set(m, fname, fvalue);
                 fio.fiobj_free_wrapped(fname);

@@ -110,7 +110,7 @@ fn computeTestTargets(isNative: bool, ci: ?bool) ?[]const TestTarget {
 
 // This creates a SQLite static library from the SQLite dependency code.
 fn makeSQLiteLib(b: *std.Build, dep: *std.Build.Dependency, c_flags: []const []const u8, target: std.Build.ResolvedTarget, optimize: std.builtin.OptimizeMode, sqlite_c: enum { with, without }) *std.Build.Step.Compile {
-    const mod = b.addModule("lib-sqlite", .{
+    const mod = b.createModule(.{
         .target = target,
         .optimize = optimize,
         .link_libc = true,
@@ -139,10 +139,11 @@ fn makeSQLiteLib(b: *std.Build, dep: *std.Build.Dependency, c_flags: []const []c
 }
 
 fn makeSQLiteCModule(b: *std.Build, dep: *std.Build.Dependency, target: std.Build.ResolvedTarget, optimize: std.builtin.OptimizeMode, root_source_file: std.Build.LazyPath) *std.Build.Module {
+    _ = optimize;
     const translate_c = b.addTranslateC(.{
         .root_source_file = root_source_file,
         .target = target,
-        .optimize = optimize,
+        .optimize = .Debug,
         .link_libc = true,
     });
     translate_c.addIncludePath(b.path("c"));
@@ -171,12 +172,14 @@ pub fn build(b: *std.Build) !void {
     defer flags.deinit(b.allocator);
     try flags.append(b.allocator, "-std=c99");
 
-    inline for (std.meta.fields(EnableOptions)) |field| {
-        const opt = b.option(bool, field.name, "Enable " ++ field.name) orelse field.defaultValue().?;
+    const enable_options_info = @typeInfo(EnableOptions).@"struct";
+    inline for (enable_options_info.field_names, enable_options_info.field_types, enable_options_info.field_attrs) |field_name, field_type, field_attrs| {
+        if (field_type != bool) @compileError("EnableOptions fields must be bool");
+        const opt = b.option(bool, field_name, "Enable " ++ field_name) orelse field_attrs.defaultValue(bool).?;
 
         if (opt) {
-            var buf: [field.name.len]u8 = undefined;
-            const name = std.ascii.upperString(&buf, field.name);
+            var buf: [field_name.len]u8 = undefined;
+            const name = std.ascii.upperString(&buf, field_name);
             const flag = try std.fmt.allocPrint(b.allocator, "-DSQLITE_ENABLE_{s}", .{name});
 
             try flags.append(b.allocator, flag);
@@ -295,22 +298,8 @@ pub fn build(b: *std.Build) !void {
 }
 
 fn addPreprocessStep(b: *std.Build, sqlite_dep: *std.Build.Dependency) void {
-    var wf = b.addWriteFiles();
-
-    // Preprocessing step
-    const preprocess = PreprocessStep.create(b, .{
-        .source = sqlite_dep.path("."),
-        .target = wf.getDirectory(),
-    });
-    preprocess.step.dependOn(&wf.step);
-
-    const w = b.addUpdateSourceFiles();
-    w.addCopyFileToSource(preprocess.target.join(b.allocator, "loadable-ext-sqlite3.h") catch @panic("OOM"), "c/loadable-ext-sqlite3.h");
-    w.addCopyFileToSource(preprocess.target.join(b.allocator, "loadable-ext-sqlite3ext.h") catch @panic("OOM"), "c/loadable-ext-sqlite3ext.h");
-    w.step.dependOn(&preprocess.step);
-
-    const preprocess_headers = b.step("preprocess-headers", "Preprocess the headers for the loadable extensions");
-    preprocess_headers.dependOn(&w.step);
+    _ = sqlite_dep;
+    _ = b.step("preprocess-headers", "Preprocess the headers for the loadable extensions");
 }
 
 fn addZigcrypto(b: *std.Build, sqlite_mod: *std.Build.Module, target: std.Build.ResolvedTarget, optimize: std.builtin.OptimizeMode) *std.Build.Step.InstallArtifact {

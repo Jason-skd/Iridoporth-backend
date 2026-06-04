@@ -10,30 +10,41 @@ const std = @import("std");
 fn PrependFnArg(Func: type, ArgType: type) type {
     const fn_info = @typeInfo(Func);
     if (fn_info != .@"fn") @compileError("First argument must be a function type");
+    const function_info = fn_info.@"fn";
 
-    comptime var new_params: [fn_info.@"fn".params.len + 1]std.builtin.Type.Fn.Param = undefined;
-    new_params[0] = .{ .is_generic = false, .is_noalias = false, .type = ArgType };
-    for (fn_info.@"fn".params, 0..) |param, i| {
-        new_params[i + 1] = param;
+    comptime var new_param_types: [function_info.param_types.len + 1]?type = undefined;
+    comptime var new_param_attrs: [function_info.param_attrs.len + 1]std.builtin.Type.Fn.ParamAttributes = undefined;
+    new_param_types[0] = ArgType;
+    new_param_attrs[0] = .{};
+    for (function_info.param_types, function_info.param_attrs, 0..) |param_type, param_attrs, i| {
+        new_param_types[i + 1] = param_type;
+        new_param_attrs[i + 1] = param_attrs;
     }
 
     return @Type(.{
         .@"fn" = .{
-            .calling_convention = fn_info.@"fn".calling_convention,
-            .is_generic = fn_info.@"fn".is_generic,
-            .is_var_args = fn_info.@"fn".is_var_args,
-            .return_type = fn_info.@"fn".return_type,
-            .params = &new_params,
+            .attrs = function_info.attrs,
+            .return_type = function_info.return_type,
+            .param_types = &new_param_types,
+            .param_attrs = &new_param_attrs,
         },
     });
+}
+
+fn isGenericFn(comptime function_info: std.builtin.Type.Fn) bool {
+    if (function_info.return_type == null) return true;
+    for (function_info.param_types) |param_type| {
+        if (param_type == null) return true;
+    }
+    return false;
 }
 
 // External Generic Interface (CallbackInterface)
 pub fn CallbackInterface(comptime Func: type) type {
     const func_info = @typeInfo(Func);
     if (func_info != .@"fn") @compileError("CallbackInterface expects a function type");
-    if (func_info.@"fn".is_generic) @compileError("CallbackInterface does not support generic functions");
-    if (func_info.@"fn".is_var_args) @compileError("CallbackInterface does not support var_args functions");
+    if (isGenericFn(func_info.@"fn")) @compileError("CallbackInterface does not support generic functions");
+    if (func_info.@"fn".attrs.varargs) @compileError("CallbackInterface does not support var_args functions");
 
     const ArgsTupleType = std.meta.ArgsTuple(Func);
     const ReturnType = func_info.@"fn".return_type.?;
@@ -58,11 +69,11 @@ pub fn CallbackInterface(comptime Func: type) type {
 pub fn Bind(Instance: type, Func: type) type {
     const func_info = @typeInfo(Func);
     if (func_info != .@"fn") @compileError("Bind expects a function type as second parameter");
-    if (func_info.@"fn".is_generic) @compileError("Binding generic functions is not supported");
-    if (func_info.@"fn".is_var_args) @compileError("Binding var_args functions is not currently supported");
+    if (isGenericFn(func_info.@"fn")) @compileError("Binding generic functions is not supported");
+    if (func_info.@"fn".attrs.varargs) @compileError("Binding var_args functions is not currently supported");
 
     const ReturnType = func_info.@"fn".return_type.?;
-    const OriginalParams = func_info.@"fn".params; // Needed for comptime loops
+    const OriginalParamTypes = func_info.@"fn".param_types;
     const ArgsTupleType = std.meta.ArgsTuple(Func);
     const InstanceMethod = PrependFnArg(Func, *Instance);
     const InterfaceType = CallbackInterface(Func);
@@ -72,58 +83,16 @@ pub fn Bind(Instance: type, Func: type) type {
         method: *const InstanceMethod,
         pub const BoundFunction = @This();
 
-        // Trampoline function using runtime tuple construction
+        fn callMethod(self: *const BoundFunction, args: anytype) ReturnType {
+            return @call(.auto, self.method, .{self.instance} ++ args);
+        }
+
+        // Trampoline function used by CallbackInterface.
         fn callDetached(ctx: ?*const anyopaque, args: ArgsTupleType) ReturnType {
             if (ctx == null) @panic("callDetached called with null context");
             const self: *const BoundFunction = @ptrCast(@alignCast(ctx.?));
 
-            // 1. Define the tuple type needed for the call: .{*Instance, OriginalArgs...}
-            const CallArgsTupleType = comptime T: {
-                var tuple_fields: [OriginalParams.len + 1]std.builtin.Type.StructField = undefined;
-                // Field 0: *Instance type
-                tuple_fields[0] = .{
-                    .name = "0",
-                    .type = @TypeOf(self.instance),
-                    .default_value_ptr = null,
-                    .is_comptime = false,
-                    .alignment = 0,
-                };
-                // Fields 1..N: Original argument types (use ArgsTupleType fields)
-                for (std.meta.fields(ArgsTupleType), 0..) |field, i| {
-                    tuple_fields[i + 1] = .{
-                        .name = std.fmt.comptimePrint("{d}", .{i + 1}),
-                        .type = field.type,
-                        .default_value_ptr = null,
-                        .is_comptime = false,
-                        .alignment = 0,
-                    };
-                }
-                break :T @Type(.{ .@"struct" = .{
-                    .layout = .auto,
-                    .fields = &tuple_fields,
-                    .decls = &.{},
-                    .is_tuple = true,
-                } });
-            };
-
-            // 2. Create and populate the tuple at runtime
-            var call_args_tuple: CallArgsTupleType = undefined;
-            @field(call_args_tuple, "0") = self.instance; // Set the instance pointer
-
-            // Copy original args from 'args' tuple to 'call_args_tuple'
-            comptime var i = 0;
-            inline while (i < OriginalParams.len) : (i += 1) {
-                const src_field_name = comptime std.fmt.comptimePrint("{}", .{i});
-                const dest_field_name = comptime std.fmt.comptimePrint("{}", .{i + 1});
-                @field(call_args_tuple, dest_field_name) = @field(args, src_field_name);
-            }
-
-            // 3. Perform the call using the populated tuple
-            if (ReturnType == void) {
-                @call(.auto, self.method, call_args_tuple);
-            } else {
-                return @call(.auto, self.method, call_args_tuple);
-            }
+            return self.callMethod(args);
         }
 
         pub fn interface(self: *const BoundFunction) InterfaceType {
@@ -143,62 +112,17 @@ pub fn Bind(Instance: type, Func: type) type {
                     ));
                 }
                 // Further check field count/types if necessary
-                if (std.meta.fields(@TypeOf(args)).len != OriginalParams.len) {
+                const arg_info = @typeInfo(@TypeOf(args)).@"struct";
+                if (arg_info.field_names.len != OriginalParamTypes.len) {
                     @compileError(std.fmt.comptimePrint(
                         "Direct .call tuple literal has wrong number of arguments (expected {}, got {}) for {}",
-                        .{ OriginalParams.len, std.meta.fields(@TypeOf(args)).len, ArgsTupleType },
+                        .{ OriginalParamTypes.len, arg_info.field_names.len, ArgsTupleType },
                     ));
                 }
                 // Could add type checks per field here too
             }
 
-            // 2. Define the tuple type needed for the call: .{*Instance, OriginalArgs...}
-            const CallArgsTupleType = comptime T: {
-                var tuple_fields: [OriginalParams.len + 1]std.builtin.Type.StructField = undefined;
-                tuple_fields[0] = .{
-                    .name = "0",
-                    .type = @TypeOf(self.instance),
-                    .default_value_ptr = null,
-                    .is_comptime = false,
-                    .alignment = 0,
-                };
-                for (std.meta.fields(ArgsTupleType), 0..) |field, i| {
-                    tuple_fields[i + 1] = .{
-                        .name = std.fmt.comptimePrint("{d}", .{i + 1}),
-                        .type = field.type,
-                        .default_value_ptr = null,
-                        .is_comptime = false,
-                        .alignment = 0,
-                    };
-                }
-                break :T @Type(.{ .@"struct" = .{
-                    .layout = .auto,
-                    .fields = &tuple_fields,
-                    .decls = &.{},
-                    .is_tuple = true,
-                } });
-            };
-
-            // 3. Create and populate the tuple at runtime
-            var call_args_tuple: CallArgsTupleType = undefined;
-            @field(call_args_tuple, "0") = self.instance;
-
-            comptime var i = 0;
-            inline while (i < OriginalParams.len) : (i += 1) {
-                const field_name = comptime std.fmt.comptimePrint("{}", .{i});
-                // Check if field exists in args (useful for struct literals, less for tuples)
-                // For tuple literals, direct access should work if type check passed.
-                // if (@hasField(@TypeOf(args), field_name)) { ... }
-                const dest_field_name = comptime std.fmt.comptimePrint("{}", .{i + 1});
-                @field(call_args_tuple, dest_field_name) = @field(args, field_name);
-            }
-
-            // 4. Perform the call using the populated tuple
-            if (ReturnType == void) {
-                @call(.auto, self.method, call_args_tuple);
-            } else {
-                return @call(.auto, self.method, call_args_tuple);
-            }
+            return self.callMethod(args);
         }
 
         pub fn init(instance_: *Instance, method_: *const InstanceMethod) BoundFunction {

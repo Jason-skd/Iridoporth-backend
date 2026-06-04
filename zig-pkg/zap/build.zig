@@ -11,7 +11,7 @@ const TestSystem = struct {
     combine_test_step: *std.Build.Step,
 
     pub fn addTest(self: TestSystem, root_src: []const u8, test_name: []const u8) void {
-        const tests_module = self.b.addModule(test_name, .{
+        const tests_module = self.b.createModule(.{
             .root_source_file = self.b.path(root_src),
             .target = self.target,
             .optimize = self.optimize,
