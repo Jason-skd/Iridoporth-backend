@@ -65,7 +65,7 @@ fn initContext(allocator: Allocator, io: std.Io, db_path: []const u8) !Context {
 }
 
 fn startDetachedStatusSampler(ctx: *Context, io: std.Io) !void {
-    const sampler_thread = try std.Thread.spawn(.{}, raspi_service.statusSampler, .{
+    const sampler_thread = try std.Thread.spawn(.{}, raspi_service.runStatusSampler, .{
         ctx,
         io,
     });

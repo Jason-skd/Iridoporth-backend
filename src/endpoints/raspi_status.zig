@@ -27,14 +27,17 @@ pub fn get(_: *RaspiStatusEndpoint, arena: Allocator, ctx: *Context, r: zap.Requ
                 .available = false,
             },
         },
-        .status => |status| RaspiStatusResponse{
-            .data = .{
-                .available = true,
-                .name = status.name,
-                .cpu_temperature = status.cpu_temperature.load(.monotonic),
-                .cpu_usage = status.cpu_usage.load(.monotonic),
-                .memory_usage = status.memory_usage.load(.monotonic),
-            },
+        .available => |available| blk: {
+            const status = available.status;
+            break :blk RaspiStatusResponse{
+                .data = .{
+                    .available = true,
+                    .name = available.name,
+                    .cpu_temperature = status.cpu_temperature.load(.monotonic),
+                    .cpu_usage = status.cpu_usage.load(.monotonic),
+                    .memory_usage = status.memory_usage.load(.monotonic),
+                },
+            };
         },
     };
 
