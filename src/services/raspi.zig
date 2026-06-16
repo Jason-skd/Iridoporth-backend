@@ -59,17 +59,20 @@ fn getCpuTemperature(io: std.Io, buffer: []u8) !f32 {
 
 fn getMemoryUsage(io: std.Io, buffer: []u8) !f32 {
     const text = try std.Io.Dir.cwd().readFile(io, "/proc/meminfo", buffer);
+    return parseMemoryUsage(text);
+}
 
+fn parseMemoryUsage(text: []const u8) !f32 {
     var total: ?u64 = null;
     var available: ?u64 = null;
 
     var lines = std.mem.tokenizeScalar(u8, text, '\n');
     while (lines.next()) |line| {
         if (total == null) {
-            total = try getValFromMeminfo(line, "MemTotal:");
+            total = try getValFromMeminfo(line, "MemTotal");
         }
         if (available == null) {
-            available = try getValFromMeminfo(line, "MemAvailable:");
+            available = try getValFromMeminfo(line, "MemAvailable");
         }
         if (total != null and available != null) {
             break;
@@ -103,7 +106,10 @@ const CpuTimes = struct {
 
 fn readCpuTimes(io: std.Io, buffer: []u8) !CpuTimes {
     const text = try std.Io.Dir.cwd().readFile(io, "/proc/stat", buffer);
+    return parseCpuTimes(text);
+}
 
+fn parseCpuTimes(text: []const u8) !CpuTimes {
     var lines = std.mem.tokenizeScalar(u8, text, '\n');
     const first_line = lines.next() orelse return error.BlankFile;
     var parts = std.mem.tokenizeAny(u8, first_line, " \t");
@@ -169,4 +175,52 @@ fn sampleStatusLoop(ctx: *Context, io: std.Io) !void {
 
         prev_cpu_times = current_cpu_times;
     }
+}
+
+test "calcCpuUsage returns percentage from total and idle deltas" {
+    const prev = CpuTimes{ .idle = 100, .total = 200 };
+    const now = CpuTimes{ .idle = 150, .total = 300 };
+
+    try std.testing.expectEqual(@as(f32, 50.0), calcCpuUsage(prev, now));
+}
+
+test "calcCpuUsage returns zero when total is zero" {
+    const prev = CpuTimes{ .idle = 100, .total = 200 };
+    const now = CpuTimes{ .idle = 100, .total = 200 };
+
+    try std.testing.expectEqual(@as(f32, 0.0), calcCpuUsage(prev, now));
+}
+
+test "getValFromMeminfo parses matching key" {
+    const value = try getValFromMeminfo("MemTotal:       8000000 kB", "MemTotal:");
+    try std.testing.expectEqual(@as(?u64, 8000000), value);
+}
+
+test "getValFromMeminfo errors when key does not match" {
+    try std.testing.expectError(error.NoValForKey, getValFromMeminfo("MemTotal:       8000000 kB", "MemAvailable:"));
+}
+
+test "parseMemoryUsage calculates used percentage" {
+    const usage = try parseMemoryUsage(
+        \\MemTotal:       1000 kB
+        \\MemAvailable:    250 kB
+    );
+
+    try std.testing.expectEqual(@as(f32, 75.0), usage);
+}
+
+test "parseMemoryUsage errors when required values are missing" {
+    try std.testing.expectError(error.MissingVal, parseMemoryUsage(
+        \\MemTotal:       1000 kB
+    ));
+}
+
+test "parseCpuTimes parses first cpu line" {
+    const times = try parseCpuTimes(
+        \\cpu 10 20 30 40 50 60 70 80 90 100
+        \\cpu0 1 2 3 4
+    );
+
+    try std.testing.expectEqual(@as(u64, 40 + 50), times.idle);
+    try std.testing.expectEqual(@as(u64, 10 + 20 + 30 + 40 + 50 + 60 + 70 + 80), times.total);
 }
