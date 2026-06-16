@@ -3,8 +3,8 @@ services:
   backend:
     image: ghcr.io/jason-skd/iridoporth-backend:latest
     environment:
-      - IRIDOPORTH_PORT="3000"
-      - IRIDOPORTH_DB_PATH="/var/lib/iridoporth/iridoporth.db"
+      IRIDOPORTH_PORT: 3000
+      IRIDOPORTH_DB_PATH: /var/lib/iridoporth/iridoporth.db
     volumes:
       - /sys/class/thermal:/sys/class/thermal:ro
       - iridoporth-db:/var/lib/iridoporth
