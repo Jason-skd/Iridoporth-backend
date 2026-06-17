@@ -14,9 +14,9 @@ const sqlite_adapter = @import("db/sqlite.zig");
 
 pub const Context = @This();
 
-pub fn init(io: std.Io, db_path: [:0]const u8) !Context {
+pub fn init(io: std.Io, allocator: Allocator, db_path: [:0]const u8) !Context {
     return .{
-        .raspi = raspi_service.init(io),
+        .raspi = raspi_service.init(io, allocator),
         .db = try sqlite_adapter.init(db_path),
         .io = io,
     };

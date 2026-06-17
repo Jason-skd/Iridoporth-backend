@@ -61,7 +61,7 @@ fn initContext(allocator: Allocator, io: std.Io, db_path: []const u8) !Context {
     const db_path_sentinel = try allocator.dupeSentinel(u8, db_path, 0);
     defer allocator.free(db_path_sentinel);
 
-    return try Context.init(io, db_path_sentinel);
+    return try Context.init(io, allocator, db_path_sentinel);
 }
 
 fn startDetachedStatusSampler(ctx: *Context, io: std.Io) !void {

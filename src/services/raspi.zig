@@ -1,4 +1,5 @@
 const std = @import("std");
+const Allocator = std.mem.Allocator;
 
 const Context = @import("../context.zig");
 
@@ -9,9 +10,8 @@ const RaspiStatus = struct {
     memory_usage: std.atomic.Value(f32),
 };
 
-pub fn init(io: std.Io) Raspi {
-    var host_name_buf: [std.posix.HOST_NAME_MAX]u8 = undefined;
-    const raspi_name = std.posix.gethostname(&host_name_buf) catch |err| {
+pub fn init(io: std.Io, allocator: Allocator) Raspi {
+    const raspi_name = getName(allocator) catch |err| {
         std.debug.print("get raspi name: {}\n", .{err});
         return .unavailable;
     };
@@ -30,6 +30,12 @@ pub fn runStatusSampler(ctx: *Context, io: std.Io) void {
         std.debug.print("status sampling: {}\n", .{err});
         ctx.raspi = Raspi.unavailable;
     };
+}
+
+fn getName(allocator: Allocator) ![]u8 {
+    var host_name_buf: [std.posix.HOST_NAME_MAX]u8 = undefined;
+    const obtained_name = try std.posix.gethostname(&host_name_buf);
+    return try allocator.dupe(u8, obtained_name);
 }
 
 fn checkStatus(io: std.Io) !RaspiStatus {
