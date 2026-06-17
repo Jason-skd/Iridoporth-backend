@@ -15,20 +15,28 @@ const sqlite_adapter = @import("db/sqlite.zig");
 pub const Context = @This();
 
 pub fn init(io: std.Io, allocator: Allocator, db_path: [:0]const u8) !Context {
+    var raspi = raspi_service.init(io, allocator);
+    errdefer raspi.deinit(allocator);
+
+    const db = try sqlite_adapter.init(db_path);
+
     return .{
-        .raspi = raspi_service.init(io, allocator),
-        .db = try sqlite_adapter.init(db_path),
         .io = io,
+        .allocator = allocator,
+        .raspi = raspi,
+        .db = db,
     };
 }
 
 pub fn deinit(self: *Context) void {
+    self.raspi.deinit(self.allocator);
     self.db.deinit();
 }
 
+io: std.Io,
+allocator: Allocator,
 raspi: Raspi,
 db: Db,
-io: std.Io,
 
 pub fn unhandledRequest(_: *Context, _: Allocator, r: zap.Request) anyerror!void {
     r.setStatus(.not_found);
