@@ -21,6 +21,16 @@ pub fn createAnonymousUser(io: std.Io, db: *Db) !User {
     return user;
 }
 
+pub fn createAccountUser(io: std.Io, db: *Db, name: []const u8, email: []const u8) !User {
+    const now = std.Io.Timestamp.now(io, .real);
+    const created_at = now.toSeconds();
+
+    const new_user: NewUser = user_domain.newAccount(name, email, created_at);
+    const user = try insertUser(db, new_user);
+
+    return user;
+}
+
 fn insertUser(db: *Db, new_user: NewUser) !User {
     const query = (
         \\INSERT INTO users (kind, role, created_at, updated_at, last_seen_at, disabled_at, email, name)
