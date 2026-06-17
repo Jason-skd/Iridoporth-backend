@@ -12,4 +12,6 @@ revoked_at: ?i64,
 pub const Method = enum {
     anonymous_cookie,
     password_login,
+
+    const BaseType = []const u8;
 };

@@ -8,6 +8,7 @@ const RaspiStatusEndpoint = @import("endpoints/raspi_status.zig");
 const FlightLogEndpoint = @import("endpoints/flight_log.zig");
 
 const raspi_service = @import("services/raspi.zig");
+const user_service = @import("services/user.zig"); // for building, remember to remove
 
 const Context = @import("context.zig");
 
