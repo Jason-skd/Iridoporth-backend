@@ -22,7 +22,9 @@ pub fn listAll(db: *Db, allocator: Allocator) ![]Entry {
 
 pub fn insert(db: *Db, io: std.Io, content: []const u8, callsign: ?[]const u8) !struct { id: i64, created_at: i64 } {
     const query = (
-        \\INSERT INTO flight_log_entries(content, callsign, created_at) VALUES (?, ?, ?)
+        \\INSERT INTO flight_log_entries(content, callsign, created_at)
+        \\VALUES (?, ?, ?)
+        \\RETURNING id
     );
     var stmt = try db.prepare(query);
     defer stmt.deinit();
@@ -30,15 +32,15 @@ pub fn insert(db: *Db, io: std.Io, content: []const u8, callsign: ?[]const u8) !
     const now = std.Io.Timestamp.now(io, .real);
     const created_at = now.toSeconds();
 
-    try stmt.exec(.{}, .{
+    const Row = struct { id: i64 };
+
+    const row = (try stmt.one(Row, .{}, .{
         .content = content,
         .callsign = callsign,
         .created_at = created_at,
-    });
+    })) orelse return error.InsertDidNotReturnRow;
 
-    const id = db.getLastInsertRowID();
-
-    return .{ .id = id, .created_at = created_at };
+    return .{ .id = row.id, .created_at = created_at };
 }
 
 const test_alloc = std.testing.allocator;
