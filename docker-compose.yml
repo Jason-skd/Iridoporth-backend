@@ -6,6 +6,7 @@ services:
       args:
         ZIG_BUILD_TARGET: aarch64-linux-gnu # modify this if not building on raspi/macos
     image: iridoporth-backend:dev
+    uts: "host"
     environment:
       IRIDOPORTH_PORT: 3000
       IRIDOPORTH_DB_PATH: /var/lib/iridoporth/iridoporth.db
