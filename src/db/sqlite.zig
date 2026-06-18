@@ -62,10 +62,10 @@ fn migrate(db: *sqlite.Db) !void {
 fn migrateToV1(db: *sqlite.Db) !void {
     try db.execMulti(
         \\CREATE TABLE IF NOT EXISTS flight_log_entries (
-        \\    id INTEGER PRIMARY KEY AUTOINCREMENT,
-        \\    content TEXT NOT NULL,
-        \\    callsign TEXT,
-        \\    created_at INTEGER NOT NULL
+        \\  id INTEGER PRIMARY KEY AUTOINCREMENT,
+        \\  content TEXT NOT NULL,
+        \\  callsign TEXT,
+        \\  created_at INTEGER NOT NULL
         \\);
         \\
         \\CREATE INDEX IF NOT EXISTS idx_flight_log_entries_created_at
@@ -84,7 +84,7 @@ fn migrateToV2(db: *sqlite.Db) !void {
         \\  created_at INTEGER NOT NULL,
         \\  updated_at INTEGER NOT NULL,
         \\  last_seen_at INTEGER NOT NULL,
-        \\  disabled_at INTEGER
+        \\  disabled_at INTEGER,
         \\
         \\  CHECK (
         \\      (kind = 'anonymous' AND name IS NULL AND email IS NULL)
@@ -98,7 +98,7 @@ fn migrateToV2(db: *sqlite.Db) !void {
     try db.execMulti(
         \\CREATE TABLE IF NOT EXISTS user_password_credentials (
         \\  user_id INTEGER PRIMARY KEY REFERENCES users(id) ON DELETE CASCADE,
-        \\  password_hash TEXT
+        \\  password_hash TEXT NOT NULL,
         \\  changed_at INTEGER NOT NULL
         \\);
     , .{});
@@ -107,14 +107,14 @@ fn migrateToV2(db: *sqlite.Db) !void {
         \\  id INTEGER PRIMARY KEY AUTOINCREMENT,
         \\  user_id INTEGER NOT NULL REFERENCES users(id) ON DELETE CASCADE,
         \\  method TEXT NOT NULL CHECK (method IN ('anonymous_cookie', 'password_login')),
-        \\  token_hash TEXT NOT NULL,
+        \\  token_hash TEXT NOT NULL ,
         \\  created_at INTEGER NOT NULL,
         \\  expires_at INTEGER NOT NULL,
         \\  last_used_at INTEGER NOT NULL,
         \\  revoked_at INTEGER
         \\);
         \\
-        \\CREATE INDEX idx_user_sessions_user_id ON user_sessions(user_id);
-        \\CREATE INDEX idx_user_sessions_token_hash ON user_sessions(token_hash);
+        \\CREATE UNIQUE INDEX idx_user_sessions_user_id ON user_sessions(user_id);
+        \\CREATE UNIQUE INDEX idx_user_sessions_token_hash ON user_sessions(token_hash);
     , .{});
 }
