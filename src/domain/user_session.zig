@@ -14,4 +14,5 @@ pub const Method = enum {
     password_login,
 
     const BaseType = []const u8;
+    const default = .anonymous_cookie;
 };

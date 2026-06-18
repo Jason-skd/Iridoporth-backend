@@ -17,12 +17,35 @@ pub const NewUser = struct {
     disabled_at: ?i64,
 };
 
-pub const Kind = union(enum) {
+pub const KindTag = enum {
+    anonymous,
+    account,
+
+    pub const BaseType = []const u8;
+    pub const default = .anonymous;
+};
+
+pub const Kind = union(KindTag) {
     anonymous: void,
     account: struct {
         email: []const u8,
         name: []const u8,
     },
+
+    pub fn fromDb(tag: KindTag, email: ?[]const u8, name: ?[]const u8) !Kind {
+        return switch (tag) {
+            .anonymous => .{ .anonymous = {} },
+            .account => {
+                if (email == null or name == null) {
+                    return error.InvalidAccountUserData;
+                }
+                .{ .account = .{
+                    .email = email.?,
+                    .name = name.?,
+                } };
+            },
+        };
+    }
 };
 
 pub const Role = enum {
@@ -30,6 +53,7 @@ pub const Role = enum {
     user,
 
     pub const BaseType = []const u8;
+    pub const default = .user;
 };
 
 pub fn newAnonymous(now: i64) NewUser {
