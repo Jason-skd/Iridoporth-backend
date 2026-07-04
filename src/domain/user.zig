@@ -8,13 +8,24 @@ pub const User = struct {
     disabled_at: ?i64,
 };
 
-pub const NewUser = struct {
+pub const UserDraft = struct {
     kind: Kind,
     role: Role,
     created_at: i64,
     updated_at: i64,
     last_seen_at: i64,
     disabled_at: ?i64,
+
+    pub fn init(kind: Kind, role: Role, now: i64) UserDraft {
+        return .{
+            .kind = kind,
+            .role = role,
+            .created_at = now,
+            .updated_at = now,
+            .last_seen_at = now,
+            .disabled_at = null,
+        };
+    }
 };
 
 pub const KindTag = enum {
@@ -55,25 +66,3 @@ pub const Role = enum {
     pub const BaseType = []const u8;
     pub const default = .user;
 };
-
-pub fn newAnonymous(now: i64) NewUser {
-    return .{
-        .kind = .anonymous,
-        .role = .user,
-        .created_at = now,
-        .updated_at = now,
-        .last_seen_at = now,
-        .disabled_at = null,
-    };
-}
-
-pub fn newAccount(name: []const u8, email: []const u8, now: i64) NewUser {
-    return .{
-        .kind = .account{ .email = email, .name = name },
-        .role = .user,
-        .created_at = now,
-        .updated_at = now,
-        .last_seen_at = now,
-        .disabled_at = null,
-    };
-}
