@@ -8,26 +8,16 @@ const sqlite_adapter = @import("../db/sqlite");
 
 const user_domain = @import("../domain/user.zig");
 const User = user_domain.User;
-const NewUser = user_domain.NewUser;
-
+const UserDraft = user_domain.UserDraft;
 const UserSession = @import("../domain/user_session.zig").UserSession;
+const UserSessionDraft = @import("../domain/user_session.zig").UserSessionDraft;
 
-pub fn createAnonymousUser(io: std.Io, db: *Db, allocator: Allocator) !User {
+pub fn createUser(io: std.Io, db: *Db, allocator: Allocator, kind: user_domain.Kind, role: user_domain.Role) !User {
     const now = std.Io.Timestamp.now(io, .real);
     const created_at = now.toSeconds();
 
-    const new_user: NewUser = user_domain.newAnonymous(created_at);
-    const user = try insertUser(db, allocator, new_user);
-
-    return user;
-}
-
-pub fn createAccountUser(io: std.Io, db: *Db, allocator: Allocator, name: []const u8, email: []const u8) !User {
-    const now = std.Io.Timestamp.now(io, .real);
-    const created_at = now.toSeconds();
-
-    const new_user: NewUser = user_domain.newAccount(name, email, created_at);
-    const user = try insertUser(db, allocator, new_user);
+    const user_draft = user_domain.UserDraft.init(kind, role, created_at);
+    const user = try insertUser(db, allocator, user_draft);
 
     return user;
 }
@@ -95,7 +85,32 @@ pub fn findPasswordHashByUserId(db: *Db, allocator: Allocator, user_id: i64) !?[
     return try stmt.oneAlloc([]const u8, allocator, .{}, .{ .user_id = user_id }) orelse null;
 }
 
-fn insertUser(db: *Db, allocator: Allocator, new_user: NewUser) !User {
+pub fn createSession(io: std.Io, db: *Db, allocator: Allocator, user_id: i64, method: UserSession.Method, token_hash: []const u8, expires_at: i64) !UserSession {
+    const now = std.Io.Timestamp.now(io, .real);
+    const created_at = now.toSeconds();
+
+    const session_draft = UserSessionDraft.init(user_id, method, token_hash, created_at, expires_at);
+    const session = try insertUserSession(db, allocator, session_draft);
+
+    return session;
+}
+
+pub fn findUserSessionByTokenHash(db: *Db, allocator: Allocator, token_hash: []const u8) !?UserSession {
+    const query = (
+        \\SELECT id, user_id, method, token_hash, created_at, expires_at, last_used_at, revoked_at
+        \\FROM user_sessions
+        \\WHERE token_hash = :token_hash{[]const u8}
+        \\  AND revoked_at IS NULL
+        \\  AND expires_at > strftime('%s', 'now')
+    );
+
+    var stmt = try db.prepare(query);
+    defer stmt.deinit();
+
+    return try stmt.oneAlloc(UserSession, allocator, .{}, .{ .token_hash = token_hash }) orelse null;
+}
+
+fn insertUser(db: *Db, allocator: Allocator, user_draft: UserDraft) !User {
     const query = (
         \\INSERT INTO users (kind, role, created_at, updated_at, last_seen_at, disabled_at, email, name)
         \\VALUES (?, ?, ?, ?, ?, ?, ?, ?)"
@@ -107,17 +122,17 @@ fn insertUser(db: *Db, allocator: Allocator, new_user: NewUser) !User {
     const Row = struct { id: i64 };
 
     const row = (try stmt.oneAlloc(Row, allocator, .{}, .{
-        .kind = @tagName(new_user.kind),
-        .role = new_user.role,
-        .created_at = new_user.created_at,
-        .updated_at = new_user.updated_at,
-        .last_seen_at = new_user.last_seen_at,
-        .disabled_at = new_user.disabled_at orelse null,
-        .email = switch (new_user.kind) {
+        .kind = @tagName(user_draft.kind),
+        .role = user_draft.role,
+        .created_at = user_draft.created_at,
+        .updated_at = user_draft.updated_at,
+        .last_seen_at = user_draft.last_seen_at,
+        .disabled_at = user_draft.disabled_at orelse null,
+        .email = switch (user_draft.kind) {
             .anonymous => null,
             .account => |account| account.email,
         },
-        .name = switch (new_user.kind) {
+        .name = switch (user_draft.kind) {
             .anonymous => null,
             .account => |account| account.name,
         },
@@ -125,12 +140,12 @@ fn insertUser(db: *Db, allocator: Allocator, new_user: NewUser) !User {
 
     return .{
         .id = row.id,
-        .kind = new_user.kind,
-        .role = new_user.role,
-        .created_at = new_user.created_at,
-        .updated_at = new_user.updated_at,
-        .last_seen_at = new_user.last_seen_at,
-        .disabled_at = new_user.disabled_at,
+        .kind = user_draft.kind,
+        .role = user_draft.role,
+        .created_at = user_draft.created_at,
+        .updated_at = user_draft.updated_at,
+        .last_seen_at = user_draft.last_seen_at,
+        .disabled_at = user_draft.disabled_at,
     };
 }
 
@@ -162,5 +177,38 @@ fn findUser(db: *Db, allocator: Allocator, comptime query: []const u8, values: a
         .updated_at = row.updated_at,
         .last_seen_at = row.last_seen_at,
         .disabled_at = row.disabled_at,
+    };
+}
+
+fn insertUserSession(db: *Db, allocator: Allocator, session_draft: UserSessionDraft) !UserSession {
+    const query = (
+        \\INSERT INTO user_sessions (user_id, method, token_hash, created_at, expires_at, last_used_at, revoked_at)
+        \\VALUES (?, ?, ?, ?, ?, ?, ?)
+        \\RETURNING id
+    );
+    var stmt = try db.prepare(query);
+    defer stmt.deinit();
+
+    const Row = struct { id: i64 };
+
+    const row = (try stmt.oneAlloc(Row, allocator, .{}, .{
+        .user_id = session_draft.user_id,
+        .method = @tagName(session_draft.method),
+        .token_hash = session_draft.token_hash,
+        .created_at = session_draft.created_at,
+        .expires_at = session_draft.expires_at,
+        .last_used_at = session_draft.last_used_at,
+        .revoked_at = session_draft.revoked_at orelse null,
+    })) orelse return error.InsertDidNotReturnRow;
+
+    return .{
+        .id = row.id,
+        .user_id = session_draft.user_id,
+        .method = session_draft.method,
+        .token_hash = session_draft.token_hash,
+        .created_at = session_draft.created_at,
+        .expires_at = session_draft.expires_at,
+        .last_used_at = session_draft.last_used_at,
+        .revoked_at = session_draft.revoked_at,
     };
 }
