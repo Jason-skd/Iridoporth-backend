@@ -9,27 +9,42 @@ const UserSession = user_session_domain.UserSession;
 
 const user_service = @import("./user.zig");
 
-pub const Entry = struct { id: i64, content: []const u8, callsign: ?[]const u8, created_at: i64 };
+pub const Entry = struct { id: i64, content: []const u8, callsign: []const u8, created_at: i64 };
+const RawEntry = struct { id: i64, content: []const u8, creator_user_id: ?i64, created_at: i64 };
 
 pub fn listAll(db: *Db, allocator: Allocator) ![]Entry {
     const query = (
-        \\SELECT id, content, callsign, created_at
+        \\SELECT id, content, creator_user_id, created_at
         \\FROM flight_log_entries
         \\ORDER BY id DESC
     );
     var stmt = try db.prepare(query);
     defer stmt.deinit();
 
-    const rows = try stmt.all(Entry, allocator, .{}, .{});
+    const rows: []RawEntry = try stmt.all(RawEntry, allocator, .{}, .{});
+    const entries = try allocator.alloc(Entry, rows.len);
 
-    return rows;
+    for (0.., rows) |i, row| {
+        const user = try user_service.findUserById(db, allocator, row.creator_user_id) orelse return error.UserNotFound; // TODO: Handle case where user is not found (e.g., user deleted)
+        entries[i] = Entry{
+            .id = row.id,
+            .content = row.content,
+            .callsign = switch (user.kind) {
+                .anonymous => null,
+                .account => |account| account.name,
+            },
+            .created_at = row.created_at,
+        };
+    }
+
+    return entries;
 }
 
 pub fn insert(db: *Db, io: std.Io, allocator: Allocator, content: []const u8, token: []const u8) !struct { id: i64, created_at: i64 } {
     const callsign = try getCallsignFromToken(db, allocator, token);
 
     const query = (
-        \\INSERT INTO flight_log_entries(content, callsign, created_at)
+        \\INSERT INTO flight_log_entries(content, creator_user_id, created_at)
         \\VALUES (?, ?, ?)
         \\RETURNING id
     );
@@ -43,7 +58,7 @@ pub fn insert(db: *Db, io: std.Io, allocator: Allocator, content: []const u8, to
 
     const row = (try stmt.one(Row, .{}, .{
         .content = content,
-        .callsign = callsign,
+        .creator_user_id = user.id, // TODO
         .created_at = created_at,
     })) orelse return error.InsertDidNotReturnRow;
 
