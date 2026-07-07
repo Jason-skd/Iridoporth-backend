@@ -9,8 +9,10 @@ const sqlite_adapter = @import("../db/sqlite");
 const user_domain = @import("../domain/user.zig");
 const User = user_domain.User;
 const UserDraft = user_domain.UserDraft;
-const UserSession = @import("../domain/user_session.zig").UserSession;
-const UserSessionDraft = @import("../domain/user_session.zig").UserSessionDraft;
+
+const user_session_domain = @import("../domain/user_session.zig");
+const UserSession = user_session_domain.UserSession;
+const UserSessionDraft = user_session_domain.UserSessionDraft;
 
 pub fn createUser(io: std.Io, db: *Db, allocator: Allocator, kind: user_domain.Kind, role: user_domain.Role) !User {
     const now = std.Io.Timestamp.now(io, .real);
@@ -85,7 +87,7 @@ pub fn findPasswordHashByUserId(db: *Db, allocator: Allocator, user_id: i64) !?[
     return try stmt.oneAlloc([]const u8, allocator, .{}, .{ .user_id = user_id }) orelse null;
 }
 
-pub fn createSession(io: std.Io, db: *Db, allocator: Allocator, user_id: i64, method: UserSession.Method, token_hash: []const u8, expires_at: i64) !UserSession {
+pub fn createSession(io: std.Io, db: *Db, allocator: Allocator, user_id: i64, method: user_session_domain.Method, token_hash: []const u8, expires_at: i64) !UserSession {
     const now = std.Io.Timestamp.now(io, .real);
     const created_at = now.toSeconds();
 
@@ -113,7 +115,7 @@ pub fn findUserSessionByTokenHash(db: *Db, allocator: Allocator, token_hash: []c
 fn insertUser(db: *Db, allocator: Allocator, user_draft: UserDraft) !User {
     const query = (
         \\INSERT INTO users (kind, role, created_at, updated_at, last_seen_at, disabled_at, email, name)
-        \\VALUES (?, ?, ?, ?, ?, ?, ?, ?)"
+        \\VALUES (?, ?, ?, ?, ?, ?, ?, ?)
         \\RETURNING id
     );
     var stmt = try db.prepare(query);

@@ -54,7 +54,7 @@ fn isZigString(comptime T: type) bool {
 
         const ptr = &info.pointer;
         // Check for CV qualifiers that would prevent coerction to []const u8
-        if (ptr.is_volatile or ptr.is_allowzero) break :blk false;
+        if (ptr.attrs.@"volatile" or ptr.attrs.@"allowzero") break :blk false;
 
         // If it's already a slice, simple check.
         if (ptr.size == .slice) {
@@ -72,6 +72,10 @@ fn isZigString(comptime T: type) bool {
 
         break :blk false;
     };
+}
+
+fn enumSqliteBaseType(comptime T: type) type {
+    return if (@hasDecl(T, "BaseType")) T.BaseType else []const u8;
 }
 
 /// Text is used to represent a SQLite TEXT value when binding a parameter or reading a column.
@@ -1131,12 +1135,14 @@ pub fn Iterator(comptime Type: type) type {
                 .@"enum" => |TI| {
                     debug.assert(columns == 1);
 
-                    if (comptime isZigString(Type.BaseType)) {
-                        @compileError("cannot read into type " ++ @typeName(Type) ++ " ; BaseType " ++ @typeName(Type.BaseType) ++ " requires allocation, use nextAlloc or oneAlloc");
+                    const BaseType = enumSqliteBaseType(Type);
+
+                    if (comptime isZigString(BaseType)) {
+                        @compileError("cannot read into type " ++ @typeName(Type) ++ " ; BaseType " ++ @typeName(BaseType) ++ " requires allocation, use nextAlloc or oneAlloc");
                     }
 
-                    if (@typeInfo(Type.BaseType) == .int) {
-                        const inner_value = try self.readField(Type.BaseType, options, 0);
+                    if (@typeInfo(BaseType) == .int) {
+                        const inner_value = try self.readField(BaseType, options, 0);
                         return @enumFromInt(@as(TI.tag_type, @intCast(inner_value)));
                     }
 
@@ -1211,16 +1217,17 @@ pub fn Iterator(comptime Type: type) type {
                 .@"enum" => |TI| {
                     debug.assert(columns == 1);
 
-                    const inner_value = try self.readField(Type.BaseType, .{ .allocator = allocator }, 0);
+                    const BaseType = enumSqliteBaseType(Type);
+                    const inner_value = try self.readField(BaseType, .{ .allocator = allocator }, 0);
 
-                    if (comptime isZigString(Type.BaseType)) {
+                    if (comptime isZigString(BaseType)) {
                         // The inner value is never returned to the user, we must free it ourselves.
                         defer allocator.free(inner_value);
 
                         // TODO(vincent): don't use unreachable
                         return std.meta.stringToEnum(Type, inner_value) orelse unreachable;
                     }
-                    if (@typeInfo(Type.BaseType) == .int) {
+                    if (@typeInfo(BaseType) == .int) {
                         return @enumFromInt(@as(TI.tag_type, @intCast(inner_value)));
                     }
                     @compileError("enum column " ++ @typeName(Type) ++ " must have a BaseType of either string or int");
@@ -1497,15 +1504,22 @@ pub fn Iterator(comptime Type: type) type {
                     .pointer => try self.readPointer(FieldType, options, i),
                     .optional => try self.readOptional(FieldType, options, i),
                     .@"enum" => |TI| {
-                        const inner_value = try self.readField(FieldType.BaseType, options, i);
+                        const BaseType = enumSqliteBaseType(FieldType);
+                        const inner_value = try self.readField(BaseType, options, i);
 
-                        if (comptime isZigString(FieldType.BaseType)) {
+                        if (comptime isZigString(BaseType)) {
                             // The inner value is never returned to the user, we must free it ourselves.
                             defer options.allocator.free(inner_value);
 
-                            return std.meta.stringToEnum(FieldType, inner_value) orelse FieldType.default;
+                            if (std.meta.stringToEnum(FieldType, inner_value)) |value| {
+                                return value;
+                            }
+                            if (comptime @hasDecl(FieldType, "default")) {
+                                return FieldType.default;
+                            }
+                            return error.SQLiteMismatch;
                         }
-                        if (@typeInfo(FieldType.BaseType) == .int) {
+                        if (@typeInfo(BaseType) == .int) {
                             return @enumFromInt(@as(TI.tag_type, @intCast(inner_value)));
                         }
                         @compileError("enum column " ++ @typeName(FieldType) ++ " must have a BaseType of either string or int");
@@ -1720,10 +1734,12 @@ pub const DynamicStatement = struct {
                     return convertResultToError(result);
                 },
                 .@"enum" => {
-                    if (comptime isZigString(FieldType.BaseType)) {
-                        try self.bindField(FieldType.BaseType, options, field_name, i, @tagName(field));
-                    } else if (@typeInfo(FieldType.BaseType) == .int) {
-                        try self.bindField(FieldType.BaseType, options, field_name, i, @intFromEnum(field));
+                    const BaseType = enumSqliteBaseType(FieldType);
+
+                    if (comptime isZigString(BaseType)) {
+                        try self.bindField(BaseType, options, field_name, i, @tagName(field));
+                    } else if (@typeInfo(BaseType) == .int) {
+                        try self.bindField(BaseType, options, field_name, i, @intFromEnum(field));
                     } else {
                         @compileError("enum column " ++ @typeName(FieldType) ++ " must have a BaseType of either string or int to bind");
                     }
