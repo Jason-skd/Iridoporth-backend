@@ -1,3 +1,11 @@
+const std = @import("std");
+
+const session_token_random_bytes_len = 32;
+pub const session_token_random_bytes_hex_len = 2 * session_token_random_bytes_len;
+
+const session_token_hash_bytes_len = std.crypto.hash.sha2.Sha256.digest_length;
+pub const session_token_hash_hex_len = 2 * session_token_hash_bytes_len;
+
 pub const UserSession = struct {
     id: i64,
     user_id: i64,
@@ -38,3 +46,16 @@ pub const Method = enum {
     const BaseType = []const u8;
     const default = .anonymous_cookie;
 };
+
+pub fn generateSessionToken(io: std.Io) std.Io.RandomSecureError![]const u8 {
+    var random_bytes: [session_token_random_bytes_len]u8 = undefined;
+    try io.randomSecure(&random_bytes);
+
+    return std.fmt.bytesToHex(random_bytes, .lower)[0..];
+}
+
+pub fn hashSessionToken(token: []const u8) []const u8 {
+    var digest: [session_token_hash_bytes_len]u8 = undefined;
+    std.crypto.hash.sha2.Sha256.hash(token, &digest, .{});
+    return std.fmt.bytesToHex(digest, .lower)[0..];
+}
