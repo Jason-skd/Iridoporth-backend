@@ -5,7 +5,7 @@ const Db = sqlite.Db;
 
 const Allocator = std.mem.Allocator;
 
-const current_schema_version = 2;
+const current_schema_version = 1;
 
 pub fn init(path: [:0]const u8) !Db {
     var db = try sqlite.Db.init(.{
@@ -47,33 +47,9 @@ fn migrate(db: *sqlite.Db) !void {
 
         try db.exec("COMMIT", .{}, .{});
     }
-
-    if (version < 2) {
-        try db.exec("BEGIN IMMEDIATE", .{}, .{});
-        errdefer db.exec("ROLLBACK", .{}, .{}) catch {};
-
-        try migrateToV2(db);
-        _ = try db.pragma(void, .{}, "user_version", "2");
-
-        try db.exec("COMMIT", .{}, .{});
-    }
 }
 
 fn migrateToV1(db: *sqlite.Db) !void {
-    try db.execMulti(
-        \\CREATE TABLE IF NOT EXISTS flight_log_entries (
-        \\  id INTEGER PRIMARY KEY AUTOINCREMENT,
-        \\  content TEXT NOT NULL,
-        \\  callsign TEXT,
-        \\  created_at INTEGER NOT NULL
-        \\);
-        \\
-        \\CREATE INDEX IF NOT EXISTS idx_flight_log_entries_created_at
-        \\ON flight_log_entries(created_at DESC, id DESC);
-    , .{});
-}
-
-fn migrateToV2(db: *sqlite.Db) !void {
     try db.execMulti(
         \\CREATE TABLE IF NOT EXISTS users (
         \\  id INTEGER PRIMARY KEY AUTOINCREMENT,
@@ -116,5 +92,16 @@ fn migrateToV2(db: *sqlite.Db) !void {
         \\
         \\CREATE UNIQUE INDEX idx_user_sessions_user_id ON user_sessions(user_id);
         \\CREATE UNIQUE INDEX idx_user_sessions_token_hash ON user_sessions(token_hash);
+    , .{});
+    try db.execMulti(
+        \\CREATE TABLE IF NOT EXISTS flight_log_entries (
+        \\  id INTEGER PRIMARY KEY AUTOINCREMENT,
+        \\  content TEXT NOT NULL,
+        \\  creator_user_id INTEGER NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+        \\  created_at INTEGER NOT NULL
+        \\);
+        \\
+        \\CREATE INDEX IF NOT EXISTS idx_flight_log_entries_created_at
+        \\ON flight_log_entries(created_at DESC, id DESC);
     , .{});
 }
