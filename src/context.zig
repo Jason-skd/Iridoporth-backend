@@ -7,15 +7,15 @@ const zap = @import("zap");
 const sqlite = @import("sqlite");
 const Db = sqlite.Db;
 
-const raspi_service = @import("services/raspi.zig");
-const Raspi = raspi_service.Raspi;
+const raspi_status_service = @import("services/raspi_status.zig");
+const Raspi = raspi_status_service.Raspi;
 
 const sqlite_adapter = @import("db/sqlite.zig");
 
 pub const Context = @This();
 
 pub fn init(io: std.Io, allocator: Allocator, db_path: [:0]const u8) !Context {
-    var raspi = raspi_service.init(io, allocator);
+    var raspi = raspi_status_service.init(io, allocator);
     errdefer raspi.deinit(allocator);
 
     const db = try sqlite_adapter.init(db_path);

@@ -7,7 +7,7 @@ const zap = @import("zap");
 const RaspiStatusEndpoint = @import("endpoints/raspi_status.zig");
 const FlightLogEndpoint = @import("endpoints/flight_log.zig");
 
-const raspi_service = @import("services/raspi.zig");
+const raspi_status_service = @import("services/raspi_status.zig");
 
 const Context = @import("context.zig");
 
@@ -16,7 +16,7 @@ const App = zap.App.Create(Context);
 pub fn main(init: std.process.Init) !void {
     var gpa: std.heap.DebugAllocator(.{
         .thread_safe = true,
-    }) = .init;
+    }) = .init; // TODO: deprecated
     defer assert(gpa.deinit() == .ok);
     const gpa_allocator = gpa.allocator();
 
@@ -65,7 +65,7 @@ fn initContext(allocator: Allocator, io: std.Io, db_path: []const u8) !Context {
 }
 
 fn startDetachedStatusSampler(ctx: *Context, io: std.Io) !void {
-    const sampler_thread = try std.Thread.spawn(.{}, raspi_service.runStatusSampler, .{
+    const sampler_thread = try std.Thread.spawn(.{}, raspi_status_service.runStatusSampler, .{
         ctx,
         io,
     });

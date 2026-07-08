@@ -2146,7 +2146,10 @@ pub fn Statement(comptime opts: StatementOptions, comptime query: anytype) type 
                     const FieldTypeInfo = @typeInfo(field_type);
                     switch (FieldTypeInfo) {
                         .@"struct", .@"enum", .@"union" => comptime assertMarkerType(
-                            if (@hasDecl(field_type, "BaseType")) field_type.BaseType else field_type,
+                            switch (FieldTypeInfo) {
+                                .@"enum" => enumSqliteBaseType(field_type),
+                                else => if (@hasDecl(field_type, "BaseType")) field_type.BaseType else field_type,
+                            },
                             typ,
                         ),
                         else => comptime assertMarkerType(field_type, typ),
@@ -2161,6 +2164,9 @@ pub fn Statement(comptime opts: StatementOptions, comptime query: anytype) type 
         }
 
         fn assertMarkerType(comptime Actual: type, comptime Expected: type) void {
+            if (comptime isZigString(Actual) and isZigString(Expected)) {
+                return;
+            }
             if (Actual != Expected) {
                 @compileError("value type " ++ @typeName(Actual) ++ " is not the bind marker type " ++ @typeName(Expected));
             }
