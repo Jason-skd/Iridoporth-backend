@@ -5,15 +5,10 @@ const zap = @import("zap");
 
 const Context = @import("../context.zig");
 
-pub const RaspiStatusEndpoint = @This();
+const raspi_status_api = @import("../api/raspi_status.zig");
+const RaspiStatusResponse = raspi_status_api.RaspiStatusResponse;
 
-const RaspiStatusResponse = struct { ok: bool = true, data: struct {
-    available: bool,
-    name: ?[]const u8 = null,
-    cpu_temperature: ?f32 = null,
-    cpu_usage: ?f32 = null,
-    memory_usage: ?f32 = null,
-} };
+pub const RaspiStatusEndpoint = @This();
 
 path: []const u8 = "/api/v1/raspi/status",
 error_strategy: zap.Endpoint.ErrorStrategy = .log_to_console,

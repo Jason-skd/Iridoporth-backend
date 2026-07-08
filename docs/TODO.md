@@ -48,4 +48,6 @@ P2:
 
 1. migrate_db 需要更佳优雅的 wrapper 方案
 2. 当前全局的 id 类型都是 INTEGER, 我认为这不合理, 最好改成 TEXT
-3. 分析下数据库层面的各种 ORDER
+3. DebugAllocator 被 deprecated
+4. raspi_status_service 可以用 Io.Clock?
+5. 如何抛出工程化的 error?

@@ -222,7 +222,7 @@ fn ParseType(comptime type_info: []const u8) type {
     if (mem.eql(u8, "usize", type_info)) return usize;
     if (mem.eql(u8, "isize", type_info)) return isize;
 
-    if (type_info[0] == 'u' or type_info[0] == 'i') {
+    if ((type_info[0] == 'u' or type_info[0] == 'i') and type_info.len > 1 and std.ascii.isDigit(type_info[1])) {
         return @Int(if (type_info[0] == 'i') .signed else .unsigned, std.fmt.parseInt(usize, type_info[1..type_info.len], 10) catch {
             @compileError("invalid type info " ++ type_info);
         });
@@ -244,7 +244,23 @@ fn ParseType(comptime type_info: []const u8) type {
     if (mem.eql(u8, "text", type_info)) return Text;
     if (mem.eql(u8, "blob", type_info)) return Blob;
 
+    if (isNamespacedTypeInfo(type_info)) return []const u8;
+
     @compileError("invalid type info " ++ type_info);
+}
+
+fn isNamespacedTypeInfo(comptime type_info: []const u8) bool {
+    var has_dot = false;
+    for (type_info) |c| {
+        if (c == '.') {
+            has_dot = true;
+            continue;
+        }
+        if (!(std.ascii.isAlphabetic(c) or std.ascii.isDigit(c) or c == '_')) {
+            return false;
+        }
+    }
+    return has_dot;
 }
 
 fn Optional(comptime T: type) type {

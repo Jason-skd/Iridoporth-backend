@@ -4,23 +4,19 @@ const zap = @import("zap");
 
 const Context = @import("../context.zig");
 
+const session_middleware = @import("../middleware/session.zig");
+const SessionContext = session_middleware.SessionContext;
+
+const flight_log_repository = @import("../repositories/flight_log.zig");
+
 const flight_log_service = @import("../services/flight_log.zig");
-const FlightLogEntry = flight_log_service.Entry;
+
+const flight_log_api = @import("../api/flight_log.zig");
+const FlightLogListResponse = flight_log_api.FlightLogListResponse;
+const FlightLogPostRequest = flight_log_api.FlightLogPostRequest;
+const FlightLogPostResponse = flight_log_api.FlightLogPostResponse;
 
 const FlightLogEndpoint = @This();
-
-const FlightLogGetResponse = struct { ok: bool, data: struct {
-    entries: []const FlightLogEntry,
-} };
-
-const FlightLogPostRequest = struct {
-    content: []const u8,
-};
-
-const FlightLogPostResponse = struct { ok: bool, data: struct {
-    id: i64,
-    created_at: i64,
-} };
 
 path: []const u8 = "/api/v1/flight-log",
 error_strategy: zap.Endpoint.ErrorStrategy = .log_to_console,
@@ -28,9 +24,9 @@ error_strategy: zap.Endpoint.ErrorStrategy = .log_to_console,
 pub fn get(_: *FlightLogEndpoint, arena: std.mem.Allocator, ctx: *Context, r: zap.Request) !void {
     r.setHeader("Content-Type", "application/json") catch {};
 
-    const entries = try flight_log_service.listAll(&ctx.db, arena);
+    const entries = try flight_log_service.listAll(arena, &ctx.db);
 
-    const response = FlightLogGetResponse{
+    const response = FlightLogListResponse{
         .ok = true,
         .data = .{
             .entries = entries,
@@ -42,16 +38,26 @@ pub fn get(_: *FlightLogEndpoint, arena: std.mem.Allocator, ctx: *Context, r: za
 }
 
 pub fn post(_: *FlightLogEndpoint, arena: std.mem.Allocator, ctx: *Context, r: zap.Request) !void {
+    const session_context: SessionContext = try session_middleware.requireOrCreateAnonymous(ctx, arena, r);
+
+    if (session_context.new_session_token) |new_token| {
+        try r.setCookie(.{
+            .name = "iridoporth_session",
+            .value = new_token[0..],
+            .path = "/",
+            .max_age_s = 60 * 60 * 24 * 91,
+            .http_only = true,
+            .secure = false, // TODO: set to true in production
+            .same_site = .Lax, // TODO: set to .Strict in production
+        });
+    }
+
     r.setHeader("Content-Type", "application/json") catch {};
 
-    r.parseCookies(false);
-    const maybe_token: ?[]const u8 = try r.getCookieStr(arena, "iridoporth_session");
-    const token = maybe_token orelse try flight_log_service.getTokenForNewUser(ctx.io, &ctx.db, arena);
+    const request_body = r.body orelse return error.InvalidRequest;
+    const parsed = try std.json.parseFromSlice(FlightLogPostRequest, arena, request_body, .{});
 
-    const body = r.body orelse return error.InvalidRequest;
-    const parsed = try std.json.parseFromSlice(FlightLogPostRequest, arena, body, .{});
-
-    const result = try flight_log_service.insert(&ctx.db, ctx.io, arena, parsed.value.content, token);
+    const result = try flight_log_repository.insert(ctx.io, arena, &ctx.db, parsed.value.content, session_context.user_id);
 
     const response = FlightLogPostResponse{
         .ok = true,
@@ -60,6 +66,7 @@ pub fn post(_: *FlightLogEndpoint, arena: std.mem.Allocator, ctx: *Context, r: z
             .created_at = result.created_at,
         },
     };
+
     const reponse_body = try std.json.Stringify.valueAlloc(arena, response, .{});
     try r.sendBody(reponse_body);
 }
