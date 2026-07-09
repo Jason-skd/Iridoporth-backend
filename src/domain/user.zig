@@ -45,7 +45,7 @@ pub const Kind = union(KindTag) {
 
     pub fn fromDb(tag: KindTag, email: ?[]const u8, name: ?[]const u8) !Kind {
         return switch (tag) {
-            .anonymous => .{ .anonymous = {} },
+            .anonymous => .anonymous,
             .account => blk: {
                 if (email == null or name == null) {
                     break :blk error.InvalidAccountUserData;

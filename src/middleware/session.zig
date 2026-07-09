@@ -21,14 +21,18 @@ pub const SessionContext = struct {
 };
 
 pub fn requireOrCreateAnonymous(ctx: *Context, allocator: Allocator, r: zap.Request) !SessionContext {
-    r.parseCookies(false);
-
     const token: []const u8 = (try r.getCookieStr(allocator, "iridoporth_session")) orelse return createAnonymousSession(ctx.io, allocator, &ctx.db);
     const user_id = try findUserId(allocator, &ctx.db, token);
     return .{
         .user_id = user_id,
         .new_session_token = null,
     };
+}
+
+pub fn getUserIdOrNull(ctx: *Context, allocator: Allocator, r: zap.Request) !?i64 {
+    const token: []const u8 = (try r.getCookieStr(allocator, "iridoporth_session")) orelse return null;
+    const user_id = try findUserId(allocator, &ctx.db, token);
+    return user_id;
 }
 
 fn createAnonymousSession(io: std.Io, allocator: Allocator, db: *Db) !SessionContext {
