@@ -22,9 +22,12 @@ path: []const u8 = "/api/v1/flight-log",
 error_strategy: zap.Endpoint.ErrorStrategy = .log_to_console,
 
 pub fn get(_: *FlightLogEndpoint, arena: std.mem.Allocator, ctx: *Context, r: zap.Request) !void {
+    r.parseCookies(false);
+    const viewer_user_id: ?i64 = try session_middleware.getUserIdOrNull(ctx, arena, r);
+
     r.setHeader("Content-Type", "application/json") catch {};
 
-    const entries = try flight_log_service.listAll(arena, &ctx.db);
+    const entries = try flight_log_service.listAll(arena, &ctx.db, viewer_user_id);
 
     const response = FlightLogListResponse{
         .ok = true,
@@ -38,6 +41,7 @@ pub fn get(_: *FlightLogEndpoint, arena: std.mem.Allocator, ctx: *Context, r: za
 }
 
 pub fn post(_: *FlightLogEndpoint, arena: std.mem.Allocator, ctx: *Context, r: zap.Request) !void {
+    r.parseCookies(false);
     const session_context: SessionContext = try session_middleware.requireOrCreateAnonymous(ctx, arena, r);
 
     if (session_context.new_session_token) |new_token| {

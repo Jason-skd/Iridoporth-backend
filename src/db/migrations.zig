@@ -49,8 +49,23 @@ pub fn migrateToV1(db: *Db) !void {
         \\CREATE TABLE IF NOT EXISTS flight_log_entries (
         \\  entry_id INTEGER PRIMARY KEY AUTOINCREMENT,
         \\  content TEXT NOT NULL,
+        \\  response TEXT,
+        \\  responded_at INTEGER,
         \\  creator_user_id INTEGER NOT NULL REFERENCES users(user_id) ON DELETE CASCADE,
-        \\  created_at INTEGER NOT NULL
+        \\  created_at INTEGER NOT NULL,
+        \\  deleted_at INTEGER,
+        \\  hidden_at INTEGER,
         \\);
+    , .{});
+    try db.execMulti(
+        \\CREATE TABLE IF NOT EXISTS flight_log_entry_likes (
+        \\  entry_id INTEGER NOT NULL REFERENCES flight_log_entries(entry_id) ON DELETE CASCADE,
+        \\  user_id INTEGER NOT NULL REFERENCES users(user_id) ON DELETE CASCADE,
+        \\  created_at INTEGER NOT NULL
+        \\
+        \\  PRIMARY KEY (entry_id, user_id)
+        \\);
+        \\
+        \\CREATE INDEX idx_flight_log_entry_likes_user_id ON flight_log_entry_likes(user_id);
     , .{});
 }

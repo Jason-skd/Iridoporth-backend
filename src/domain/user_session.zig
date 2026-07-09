@@ -13,7 +13,7 @@ pub const UserSession = struct {
     method: Method,
     created_at: i64,
     expires_at: i64,
-    last_used_at: i64,
+    last_used_at: i64, // TODO: havn't been used yet!
     revoked_at: ?i64,
 };
 
