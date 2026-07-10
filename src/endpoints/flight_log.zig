@@ -42,26 +42,14 @@ pub fn get(_: *FlightLogEndpoint, arena: std.mem.Allocator, ctx: *Context, r: za
 
 pub fn post(_: *FlightLogEndpoint, arena: std.mem.Allocator, ctx: *Context, r: zap.Request) !void {
     r.parseCookies(false);
-    const session_context: SessionContext = try session_middleware.requireOrCreateAnonymous(ctx, arena, r);
-
-    if (session_context.new_session_token) |new_token| {
-        try r.setCookie(.{
-            .name = "iridoporth_session",
-            .value = new_token[0..],
-            .path = "/",
-            .max_age_s = 60 * 60 * 24 * 91,
-            .http_only = true,
-            .secure = false, // TODO: set to true in production
-            .same_site = .Lax, // TODO: set to .Strict in production
-        });
-    }
+    const creator_user_id: i64 = try session_middleware.requireUserIdOrCreateAnonymous(ctx, arena, r);
 
     r.setHeader("Content-Type", "application/json") catch {};
 
     const request_body = r.body orelse return error.InvalidRequest;
     const parsed = try std.json.parseFromSlice(FlightLogPostRequest, arena, request_body, .{});
 
-    const result = try flight_log_repository.insert(ctx.io, arena, &ctx.db, parsed.value.content, session_context.user_id);
+    const result = try flight_log_repository.insert(ctx.io, arena, &ctx.db, parsed.value.content, creator_user_id);
 
     const response = FlightLogPostResponse{
         .ok = true,

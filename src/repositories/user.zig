@@ -101,6 +101,25 @@ pub fn findPasswordHashByUserId(db: *Db, allocator: Allocator, user_id: i64) !?[
     return try stmt.oneAlloc([]const u8, allocator, .{}, .{ .user_id = user_id });
 }
 
+pub const PasswordHashWithUserId = struct {
+    password_hash: []const u8,
+    user_id: i64,
+};
+
+pub fn findPasswordHashByEmail(db: *Db, allocator: Allocator, email: []const u8) !?PasswordHashWithUserId {
+    const query = (
+        \\SELECT upc.password_hash, upc.user_id
+        \\FROM user_password_credentials AS upc
+        \\JOIN users AS u ON upc.user_id = u.user_id
+        \\WHERE u.email = :email{[]const u8}
+    );
+
+    var stmt = try db.prepare(query);
+    defer stmt.deinit();
+
+    return try stmt.oneAlloc(PasswordHashWithUserId, allocator, .{}, .{ .email = email });
+}
+
 fn insertUser(allocator: Allocator, db: *Db, user_draft: UserDraft) !User {
     const query = (
         \\INSERT INTO users (kind, role, created_at, updated_at, last_seen_at, disabled_at, email, name)

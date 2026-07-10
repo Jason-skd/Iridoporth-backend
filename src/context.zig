@@ -7,8 +7,10 @@ const zap = @import("zap");
 const sqlite = @import("sqlite");
 const Db = sqlite.Db;
 
+const raspi_status_domain = @import("domain/raspi_status.zig");
+const Raspi = raspi_status_domain.Raspi;
+
 const raspi_status_service = @import("services/raspi_status.zig");
-const Raspi = raspi_status_service.Raspi;
 
 const sqlite_adapter = @import("db/sqlite.zig");
 

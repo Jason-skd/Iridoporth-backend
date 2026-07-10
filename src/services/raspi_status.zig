@@ -1,29 +1,11 @@
 const std = @import("std");
 const Allocator = std.mem.Allocator;
 
+const raspi_status_domain = @import("../domain/raspi_status.zig");
+const Raspi = raspi_status_domain.Raspi;
+const RaspiStatus = raspi_status_domain.RaspiStatus;
+
 const Context = @import("../context.zig");
-
-pub const Raspi = union(enum) {
-    unavailable: void,
-    available: struct { name: []u8, status: RaspiStatus },
-    pub fn deinit(self: *Raspi, allocator: Allocator) void {
-        switch (self.*) {
-            .unavailable => {},
-            .available => |available| {
-                allocator.free(available.name);
-            },
-        }
-
-        self.* = .unavailable;
-    }
-};
-
-const RaspiStatus = struct {
-    cpu_temperature: std.atomic.Value(f32),
-    cpu_usage: std.atomic.Value(f32),
-    memory_usage: std.atomic.Value(f32),
-};
-
 pub fn init(io: std.Io, allocator: Allocator) Raspi {
     const raspi_name = getName(allocator) catch |err| {
         std.debug.print("get raspi name: {}\n", .{err});
