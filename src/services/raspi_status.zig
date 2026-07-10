@@ -6,6 +6,7 @@ const Raspi = raspi_status_domain.Raspi;
 const RaspiStatus = raspi_status_domain.RaspiStatus;
 
 const Context = @import("../context.zig");
+
 pub fn init(io: std.Io, allocator: Allocator) Raspi {
     const raspi_name = getName(allocator) catch |err| {
         std.debug.print("get raspi name: {}\n", .{err});
@@ -22,8 +23,10 @@ pub fn init(io: std.Io, allocator: Allocator) Raspi {
     } };
 }
 
-pub fn runStatusSampler(ctx: *Context, io: std.Io) void {
-    sampleStatusLoop(ctx, io) catch |err| {
+pub fn runStatusSampler(ctx: *Context) void {
+    sampleStatusLoop(
+        ctx,
+    ) catch |err| {
         std.debug.print("status sampling: {}\n", .{err});
         ctx.raspi = Raspi.unavailable;
     };
@@ -51,7 +54,11 @@ fn checkStatus(io: std.Io) !RaspiStatus {
 }
 
 fn getCpuTemperature(io: std.Io, buffer: []u8) !f32 {
-    const text = try std.Io.Dir.cwd().readFile(io, "/sys/class/thermal/thermal_zone0/temp", buffer);
+    const text = try std.Io.Dir.cwd().readFile(
+        io,
+        "/sys/class/thermal/thermal_zone0/temp",
+        buffer,
+    );
 
     const raw = std.mem.trim(u8, text, " \t\r\n\x00");
     const milli = try std.fmt.parseInt(u64, raw, 10);
@@ -61,7 +68,11 @@ fn getCpuTemperature(io: std.Io, buffer: []u8) !f32 {
 }
 
 fn getMemoryUsage(io: std.Io, buffer: []u8) !f32 {
-    const text = try std.Io.Dir.cwd().readFile(io, "/proc/meminfo", buffer);
+    const text = try std.Io.Dir.cwd().readFile(
+        io,
+        "/proc/meminfo",
+        buffer,
+    );
     return parseMemoryUsage(text);
 }
 
@@ -108,14 +119,26 @@ const CpuTimes = struct {
 };
 
 fn readCpuTimes(io: std.Io, buffer: []u8) !CpuTimes {
-    const text = try std.Io.Dir.cwd().readFile(io, "/proc/stat", buffer);
+    const text = try std.Io.Dir.cwd().readFile(
+        io,
+        "/proc/stat",
+        buffer,
+    );
     return parseCpuTimes(text);
 }
 
 fn parseCpuTimes(text: []const u8) !CpuTimes {
-    var lines = std.mem.tokenizeScalar(u8, text, '\n');
+    var lines = std.mem.tokenizeScalar(
+        u8,
+        text,
+        '\n',
+    );
     const first_line = lines.next() orelse return error.BlankFile;
-    var parts = std.mem.tokenizeAny(u8, first_line, " \t");
+    var parts = std.mem.tokenizeAny(
+        u8,
+        first_line,
+        " \t",
+    );
 
     var idle: u64 = 0;
     var total: u64 = 0;
@@ -152,19 +175,25 @@ fn calcCpuUsage(prev: CpuTimes, now: CpuTimes) f32 {
     return @as(f32, @floatFromInt(total_delta - idle_delta)) * 100.0 / @as(f32, @floatFromInt(total_delta));
 }
 
-fn sampleStatusLoop(ctx: *Context, io: std.Io) !void {
+fn sampleStatusLoop(ctx: *Context) !void {
     var temp_buffer: [1024]u8 = undefined;
-    var prev_cpu_times = try readCpuTimes(io, temp_buffer[0..]);
+    var prev_cpu_times = try readCpuTimes(ctx.io, temp_buffer[0..]);
 
     while (true) {
-        io.sleep(.fromSeconds(1), .awake) catch {};
+        ctx.io.sleep(.fromSeconds(1), .awake) catch {};
 
-        const cpu_temperature = try getCpuTemperature(io, temp_buffer[0..]);
+        const cpu_temperature = try getCpuTemperature(
+            ctx.io,
+            temp_buffer[0..],
+        );
 
-        const current_cpu_times = try readCpuTimes(io, temp_buffer[0..]);
+        const current_cpu_times = try readCpuTimes(
+            ctx.io,
+            temp_buffer[0..],
+        );
         const cpu_usage = calcCpuUsage(prev_cpu_times, current_cpu_times);
 
-        const memory_usage = try getMemoryUsage(io, temp_buffer[0..]);
+        const memory_usage = try getMemoryUsage(ctx.io, temp_buffer[0..]);
 
         switch (ctx.raspi) {
             .unavailable => return,
@@ -184,23 +213,38 @@ test "calcCpuUsage returns percentage from total and idle deltas" {
     const prev = CpuTimes{ .idle = 100, .total = 200 };
     const now = CpuTimes{ .idle = 150, .total = 300 };
 
-    try std.testing.expectEqual(@as(f32, 50.0), calcCpuUsage(prev, now));
+    try std.testing.expectEqual(@as(f32, 50.0), calcCpuUsage(
+        prev,
+        now,
+    ));
 }
 
 test "calcCpuUsage returns zero when total is zero" {
     const prev = CpuTimes{ .idle = 100, .total = 200 };
     const now = CpuTimes{ .idle = 100, .total = 200 };
 
-    try std.testing.expectEqual(@as(f32, 0.0), calcCpuUsage(prev, now));
+    try std.testing.expectEqual(@as(f32, 0.0), calcCpuUsage(
+        prev,
+        now,
+    ));
 }
 
 test "getValFromMeminfo parses matching key" {
-    const value = try getValFromMeminfo("MemTotal:       8000000 kB", "MemTotal:");
+    const value = try getValFromMeminfo(
+        "MemTotal:       8000000 kB",
+        "MemTotal:",
+    );
     try std.testing.expectEqual(@as(?u64, 8000000), value);
 }
 
 test "getValFromMeminfo errors when key does not match" {
-    try std.testing.expectError(error.NoValForKey, getValFromMeminfo("MemTotal:       8000000 kB", "MemAvailable:"));
+    try std.testing.expectError(
+        error.NoValForKey,
+        getValFromMeminfo(
+            "MemTotal:       8000000 kB",
+            "MemAvailable:",
+        ),
+    );
 }
 
 test "parseMemoryUsage calculates used percentage" {
@@ -213,9 +257,12 @@ test "parseMemoryUsage calculates used percentage" {
 }
 
 test "parseMemoryUsage errors when required values are missing" {
-    try std.testing.expectError(error.MissingVal, parseMemoryUsage(
-        \\MemTotal:       1000 kB
-    ));
+    try std.testing.expectError(
+        error.MissingVal,
+        parseMemoryUsage(
+            \\MemTotal:       1000 kB
+        ),
+    );
 }
 
 test "parseCpuTimes parses first cpu line" {
@@ -225,5 +272,8 @@ test "parseCpuTimes parses first cpu line" {
     );
 
     try std.testing.expectEqual(@as(u64, 40 + 50), times.idle);
-    try std.testing.expectEqual(@as(u64, 10 + 20 + 30 + 40 + 50 + 60 + 70 + 80), times.total);
+    try std.testing.expectEqual(
+        @as(u64, 10 + 20 + 30 + 40 + 50 + 60 + 70 + 80),
+        times.total,
+    );
 }

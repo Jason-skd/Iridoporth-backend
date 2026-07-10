@@ -10,7 +10,7 @@ pub const FlightLogEntryDTO = struct {
     liked_by_this_user: bool,
 };
 
-pub const FlightLogListResponse = struct { ok: bool, data: struct {
+pub const FlightLogListResponse = struct { ok: bool = true, data: struct {
     entries: []const FlightLogEntryDTO,
 } };
 
@@ -18,7 +18,7 @@ pub const FlightLogPostRequest = struct {
     content: []const u8,
 };
 
-pub const FlightLogPostResponse = struct { ok: bool, data: struct {
+pub const FlightLogPostResponse = struct { ok: bool = true, data: struct {
     id: i64,
     created_at: i64,
 } };

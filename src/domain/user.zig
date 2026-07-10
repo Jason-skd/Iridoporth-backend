@@ -4,7 +4,7 @@ pub const User = struct {
     role: Role,
     created_at: i64,
     updated_at: i64,
-    last_seen_at: i64,
+    last_seen_at: i64, // TODO: not used yet!
     disabled_at: ?i64,
 };
 

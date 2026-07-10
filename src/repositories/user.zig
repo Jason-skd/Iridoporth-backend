@@ -12,27 +12,57 @@ pub fn createAnonymousUser(io: std.Io, allocator: Allocator, db: *Db) !User {
     const now = std.Io.Timestamp.now(io, .real);
     const created_at = now.toSeconds();
 
-    const user_draft = user_domain.UserDraft.init(.anonymous, .user, created_at);
+    const user_draft = user_domain.UserDraft.init(
+        .anonymous,
+        .user,
+        created_at,
+    );
     const user = try insertUser(allocator, db, user_draft);
 
     return user;
 }
 
-pub fn createAccountUser(io: std.Io, allocator: Allocator, db: *Db, email: []const u8, name: []const u8) !User {
+pub fn createAccountUser(
+    io: std.Io,
+    allocator: Allocator,
+    db: *Db,
+    email: []const u8,
+    name: []const u8,
+) !User {
     const now = std.Io.Timestamp.now(io, .real);
     const created_at = now.toSeconds();
 
-    const user_draft = user_domain.UserDraft.init(.account, .user, created_at, .{ .email = email, .name = name });
+    const user_draft = user_domain.UserDraft.init(
+        .{ .account = .{
+            .email = email,
+            .name = name,
+        } },
+        .user,
+        created_at,
+    );
     const user = try insertUser(allocator, db, user_draft);
 
     return user;
 }
 
-pub fn createAdmin(io: std.Io, allocator: Allocator, db: *Db, email: []const u8, name: []const u8) !User {
+pub fn createAdmin(
+    io: std.Io,
+    allocator: Allocator,
+    db: *Db,
+    email: []const u8,
+    name: []const u8,
+) !User {
     const now = std.Io.Timestamp.now(io, .real);
     const created_at = now.toSeconds();
 
-    const user_draft = user_domain.UserDraft.init(.account, .admin, created_at, .{ .email = email, .name = name });
+    const user_draft = user_domain.UserDraft.init(
+        .{ .account = .{
+            .email = email,
+            .name = name,
+        } },
+        .admin,
+        created_at,
+    );
     const user = try insertUser(allocator, db, user_draft);
 
     return user;
@@ -106,7 +136,11 @@ pub const PasswordHashWithUserId = struct {
     user_id: i64,
 };
 
-pub fn findPasswordHashByEmail(db: *Db, allocator: Allocator, email: []const u8) !?PasswordHashWithUserId {
+pub fn findPasswordHashByEmail(
+    db: *Db,
+    allocator: Allocator,
+    email: []const u8,
+) !?PasswordHashWithUserId {
     const query = (
         \\SELECT upc.password_hash, upc.user_id
         \\FROM user_password_credentials AS upc
@@ -159,7 +193,12 @@ fn insertUser(allocator: Allocator, db: *Db, user_draft: UserDraft) !User {
     };
 }
 
-fn findUser(allocator: Allocator, db: *Db, comptime query: []const u8, values: anytype) !?User {
+fn findUser(
+    allocator: Allocator,
+    db: *Db,
+    comptime query: []const u8,
+    values: anytype,
+) !?User {
     var stmt = try db.prepare(query);
     defer stmt.deinit();
 
@@ -177,7 +216,11 @@ fn findUser(allocator: Allocator, db: *Db, comptime query: []const u8, values: a
 
     const row = try stmt.oneAlloc(Row, allocator, .{}, values) orelse return null;
 
-    const kind = try user_domain.Kind.fromDb(row.kind, row.email, row.name);
+    const kind = try user_domain.Kind.fromDb(
+        row.kind,
+        row.email,
+        row.name,
+    );
 
     return .{
         .id = row.id,
