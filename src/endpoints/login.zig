@@ -7,6 +7,8 @@ const Context = @import("../context.zig");
 
 const session_middleware = @import("../middleware/session.zig");
 
+const http_middleware = @import("../middleware/http.zig");
+
 const login_service = @import("../services/login.zig");
 
 const login_api = @import("../api/login.zig");
@@ -67,10 +69,10 @@ pub fn post(
         },
     };
 
-    const reponse_body = try std.json.Stringify.valueAlloc(
+    try http_middleware.stringifyAndSendResponse(
+        LoginResponse,
         arena,
+        r,
         response,
-        .{},
     );
-    try r.sendBody(reponse_body);
 }

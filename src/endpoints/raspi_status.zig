@@ -5,6 +5,8 @@ const zap = @import("zap");
 
 const Context = @import("../context.zig");
 
+const http_middleware = @import("../middleware/http.zig");
+
 const raspi_status_api = @import("../api/raspi_status.zig");
 const RaspiStatusResponse = raspi_status_api.RaspiStatusResponse;
 
@@ -41,6 +43,10 @@ pub fn get(
         },
     };
 
-    const body = try std.json.Stringify.valueAlloc(arena, response, .{});
-    try r.sendBody(body);
+    try http_middleware.stringifyAndSendResponse(
+        RaspiStatusResponse,
+        arena,
+        r,
+        response,
+    );
 }
