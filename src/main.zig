@@ -25,7 +25,7 @@ pub fn main(init: std.process.Init) !void {
     var app_context = try initContext(gpa_allocator, init.io, config.db_path);
     defer app_context.deinit();
 
-    try startDetachedStatusSampler(&app_context, init.io);
+    try startDetachedStatusSampler(&app_context);
 
     try App.init(gpa_allocator, &app_context, .{
         .default_error_strategy = .log_to_response,
@@ -64,10 +64,9 @@ fn initContext(allocator: Allocator, io: std.Io, db_path: []const u8) !Context {
     return try Context.init(io, allocator, db_path_sentinel);
 }
 
-fn startDetachedStatusSampler(ctx: *Context, io: std.Io) !void {
+fn startDetachedStatusSampler(ctx: *Context) !void {
     const sampler_thread = try std.Thread.spawn(.{}, raspi_status_service.runStatusSampler, .{
         ctx,
-        io,
     });
     sampler_thread.detach();
 }
