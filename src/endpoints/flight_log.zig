@@ -31,8 +31,8 @@ pub fn get(
 ) !void {
     r.parseCookies(false);
     const viewer_user_id: ?i64 = try session_middleware.getUserIdOrNull(
-        ctx,
         arena,
+        &ctx.db,
         r,
     );
 
@@ -67,8 +67,9 @@ pub fn post(
 ) !void {
     r.parseCookies(false);
     const creator_user_id: i64 = try session_middleware.requireUserIdOrCreateAnonymous(
-        ctx,
+        ctx.io,
         arena,
+        &ctx.db,
         r,
     );
 
