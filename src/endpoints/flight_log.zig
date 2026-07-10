@@ -5,7 +5,6 @@ const zap = @import("zap");
 const Context = @import("../context.zig");
 
 const session_middleware = @import("../middleware/session.zig");
-const SessionContext = session_middleware.SessionContext;
 
 const http_middleware = @import("../middleware/http.zig");
 

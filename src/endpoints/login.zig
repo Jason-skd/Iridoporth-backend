@@ -47,7 +47,7 @@ pub fn post(
     const response: LoginResponse = switch (login_result) {
         .success => |user_id| blk: {
             try session_middleware.setSessionForAccount(
-                ctx,
+                ctx.io,
                 arena,
                 r,
                 user_id,
