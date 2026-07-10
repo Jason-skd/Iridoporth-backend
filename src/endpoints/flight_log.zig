@@ -4,9 +4,9 @@ const zap = @import("zap");
 
 const Context = @import("../context.zig");
 
-const session_middleware = @import("../middleware/session.zig");
+const request_user_http = @import("../http/request_user.zig");
 
-const http_middleware = @import("../middleware/http.zig");
+const response_http = @import("../http/response.zig");
 
 const flight_log_repository = @import("../repositories/flight_log.zig");
 
@@ -29,7 +29,7 @@ pub fn get(
     r: zap.Request,
 ) !void {
     r.parseCookies(false);
-    const viewer_user_id: ?i64 = try session_middleware.getUserIdOrNull(
+    const viewer_user_id: ?i64 = try request_user_http.getUserIdOrNull(
         arena,
         &ctx.db,
         r,
@@ -50,7 +50,7 @@ pub fn get(
         },
     };
 
-    try http_middleware.stringifyAndSendResponse(
+    try response_http.stringifyAndSendResponse(
         FlightLogListResponse,
         arena,
         r,
@@ -65,7 +65,7 @@ pub fn post(
     r: zap.Request,
 ) !void {
     r.parseCookies(false);
-    const creator_user_id: i64 = try session_middleware.requireUserIdOrCreateAnonymous(
+    const creator_user_id: i64 = try request_user_http.requireUserIdOrCreateAnonymous(
         ctx.io,
         arena,
         &ctx.db,
@@ -98,7 +98,7 @@ pub fn post(
         },
     };
 
-    try http_middleware.stringifyAndSendResponse(
+    try response_http.stringifyAndSendResponse(
         FlightLogPostResponse,
         arena,
         r,

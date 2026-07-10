@@ -5,9 +5,9 @@ const zap = @import("zap");
 
 const Context = @import("../context.zig");
 
-const session_middleware = @import("../middleware/session.zig");
+const request_user_http = @import("../http/request_user.zig");
 
-const http_middleware = @import("../middleware/http.zig");
+const response_http = @import("../http/response.zig");
 
 const login_service = @import("../services/login.zig");
 
@@ -46,7 +46,7 @@ pub fn post(
 
     const response: LoginResponse = switch (login_result) {
         .success => |user_id| blk: {
-            try session_middleware.setSessionForAccount(
+            try request_user_http.setSessionForAccount(
                 ctx.io,
                 arena,
                 r,
@@ -69,7 +69,7 @@ pub fn post(
         },
     };
 
-    try http_middleware.stringifyAndSendResponse(
+    try response_http.stringifyAndSendResponse(
         LoginResponse,
         arena,
         r,
