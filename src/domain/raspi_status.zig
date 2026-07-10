@@ -4,6 +4,7 @@ const Allocator = std.mem.Allocator;
 pub const Raspi = union(enum) {
     unavailable: void,
     available: struct { name: []u8, status: RaspiStatus },
+
     pub fn deinit(self: *Raspi, allocator: Allocator) void {
         switch (self.*) {
             .unavailable => {},

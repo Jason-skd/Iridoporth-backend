@@ -13,7 +13,12 @@ pub const RaspiStatusEndpoint = @This();
 path: []const u8 = "/api/v1/raspi/status",
 error_strategy: zap.Endpoint.ErrorStrategy = .log_to_console,
 
-pub fn get(_: *RaspiStatusEndpoint, arena: Allocator, ctx: *Context, r: zap.Request) !void {
+pub fn get(
+    _: *RaspiStatusEndpoint,
+    arena: Allocator,
+    ctx: *Context,
+    r: zap.Request,
+) !void {
     r.setHeader("Content-Type", "application/json") catch {};
 
     const response = switch (ctx.raspi) {

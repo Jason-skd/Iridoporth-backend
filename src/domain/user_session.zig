@@ -26,7 +26,13 @@ pub const UserSessionDraft = struct {
     last_used_at: i64,
     revoked_at: ?i64,
 
-    pub fn init(user_id: i64, method: Method, token_hash: []const u8, now: i64, expires_at: i64) UserSessionDraft {
+    pub fn init(
+        user_id: i64,
+        method: Method,
+        token_hash: []const u8,
+        now: i64,
+        expires_at: i64,
+    ) UserSessionDraft {
         return .{
             .user_id = user_id,
             .method = method,

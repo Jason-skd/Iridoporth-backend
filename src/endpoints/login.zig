@@ -18,17 +18,38 @@ pub const LoginEndpoint = @This();
 path: []const u8 = "/login",
 error_strategy: zap.Endpoint.ErrorStrategy = .log_to_console,
 
-pub fn post(_: *LoginEndpoint, arena: Allocator, ctx: *Context, r: zap.request) !void {
+pub fn post(
+    _: *LoginEndpoint,
+    arena: Allocator,
+    ctx: *Context,
+    r: zap.request,
+) !void {
     r.setHeader("Content-Type", "application/json") catch {};
 
     const request_body = r.body orelse return error.InvalidRequest;
-    const parsed = try std.json.parseFromSlice(LoginRequest, arena, request_body, .{});
+    const parsed = try std.json.parseFromSlice(
+        LoginRequest,
+        arena,
+        request_body,
+        .{},
+    );
 
-    const login_result = try login_service.login(&ctx.io, arena, &ctx.db, parsed.value.email, parsed.value.password);
+    const login_result = try login_service.login(
+        &ctx.io,
+        arena,
+        &ctx.db,
+        parsed.value.email,
+        parsed.value.password,
+    );
 
     const response: LoginResponse = switch (login_result) {
         .success => |user_id| blk: {
-            try session_middleware.setSessionForAccount(ctx, arena, r, user_id);
+            try session_middleware.setSessionForAccount(
+                ctx,
+                arena,
+                r,
+                user_id,
+            );
             break :blk LoginResponse{
                 .ok = true,
                 .data = .{
@@ -46,6 +67,10 @@ pub fn post(_: *LoginEndpoint, arena: Allocator, ctx: *Context, r: zap.request) 
         },
     };
 
-    const reponse_body = try std.json.Stringify.valueAlloc(arena, response, .{});
+    const reponse_body = try std.json.Stringify.valueAlloc(
+        arena,
+        response,
+        .{},
+    );
     try r.sendBody(reponse_body);
 }

@@ -49,6 +49,7 @@ pub fn getUserIdOrNull(ctx: *Context, arena: Allocator, r: zap.Request) !?i64 {
         "iridoporth_session",
     )) orelse return null;
     const user_id = try findUserId(arena, &ctx.db, token);
+
     return user_id;
 }
 

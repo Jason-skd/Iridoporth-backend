@@ -68,7 +68,10 @@ pub fn listAll(allocator: Allocator, db: *Db, viewer_user_id: ?i64) ![]FlightLog
         list[i] = FlightLogListItem{
             .id = row.id,
             .content = row.content,
-            .response = flight_log_domain.FlightLogResponse.fromDb(row.content, row.responded_at),
+            .response = flight_log_domain.FlightLogResponse.fromDb(
+                row.content,
+                row.responded_at,
+            ),
             .callsign = row.callsign,
             .created_at = row.created_at,
             .created_by_this_user = row.created_by_this_user,
@@ -80,7 +83,13 @@ pub fn listAll(allocator: Allocator, db: *Db, viewer_user_id: ?i64) ![]FlightLog
     return list;
 }
 
-pub fn insert(io: std.Io, allocator: Allocator, db: *Db, content: []const u8, creator_user_id: i64) !struct { id: i64, created_at: i64 } {
+pub fn insert(
+    io: std.Io,
+    allocator: Allocator,
+    db: *Db,
+    content: []const u8,
+    creator_user_id: i64,
+) !struct { id: i64, created_at: i64 } {
     const now = std.Io.Timestamp.now(io, .real);
     const created_at = now.toSeconds();
 
@@ -106,7 +115,12 @@ pub fn insert(io: std.Io, allocator: Allocator, db: *Db, content: []const u8, cr
     };
 }
 
-pub fn respond(io: std.Io, db: *Db, entry_id: i64, response_content: []const u8) !void {
+pub fn respond(
+    io: std.Io,
+    db: *Db,
+    entry_id: i64,
+    response_content: []const u8,
+) !void {
     const now = std.Io.Timestamp.now(io, .real);
     const responded_at = now.toSeconds();
 

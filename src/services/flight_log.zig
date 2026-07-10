@@ -12,7 +12,11 @@ const flight_log_api = @import("../api/flight_log.zig");
 const FlightLogEntryDTO = flight_log_api.FlightLogEntryDTO;
 
 pub fn listAll(allocator: Allocator, db: *Db, viewer_user_id: ?i64) ![]FlightLogEntryDTO {
-    const entries = try flight_log_repository.listAll(allocator, db, viewer_user_id);
+    const entries = try flight_log_repository.listAll(
+        allocator,
+        db,
+        viewer_user_id,
+    );
 
     var dtos = try allocator.alloc(FlightLogEntryDTO, entries.len);
     for (0.., entries) |i, entry| {
