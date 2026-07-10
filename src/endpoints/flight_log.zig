@@ -7,6 +7,8 @@ const Context = @import("../context.zig");
 const session_middleware = @import("../middleware/session.zig");
 const SessionContext = session_middleware.SessionContext;
 
+const http_middleware = @import("../middleware/http.zig");
+
 const flight_log_repository = @import("../repositories/flight_log.zig");
 
 const flight_log_service = @import("../services/flight_log.zig");
@@ -49,8 +51,12 @@ pub fn get(
         },
     };
 
-    const body = try std.json.Stringify.valueAlloc(arena, response, .{});
-    try r.sendBody(body);
+    try http_middleware.stringifyAndSendResponse(
+        FlightLogListResponse,
+        arena,
+        r,
+        response,
+    );
 }
 
 pub fn post(
@@ -92,10 +98,10 @@ pub fn post(
         },
     };
 
-    const reponse_body = try std.json.Stringify.valueAlloc(
+    try http_middleware.stringifyAndSendResponse(
+        FlightLogPostResponse,
         arena,
+        r,
         response,
-        .{},
     );
-    try r.sendBody(reponse_body);
 }
