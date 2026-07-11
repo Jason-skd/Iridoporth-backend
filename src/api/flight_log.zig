@@ -22,3 +22,10 @@ pub const FlightLogPostResponse = struct { ok: bool = true, data: struct {
     id: i64,
     created_at: i64,
 } };
+
+pub const FlightLogActionResponse = struct { ok: bool = true, data: struct {} };
+
+pub const FlightLogPatchRequest = struct {
+    is_deleted: ?bool,
+    is_hidden: ?bool,
+};

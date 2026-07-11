@@ -5,7 +5,7 @@ const assert = std.debug.assert;
 const zap = @import("zap");
 
 const RaspiStatusEndpoint = @import("endpoints/raspi_status.zig");
-const FlightLogEndpoint = @import("endpoints/flight_log.zig");
+const FlightLogEndpoint = @import("endpoints/flight_log/dispatcher.zig");
 
 const raspi_status_service = @import("services/raspi_status.zig");
 
