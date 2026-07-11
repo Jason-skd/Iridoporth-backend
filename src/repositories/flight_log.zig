@@ -144,7 +144,7 @@ pub fn respond(
     }
 }
 
-pub fn delete(io: std.Io, db: *Db, entry_id: i64, viewer_user_id: i64) !void {
+pub fn delete(io: std.Io, db: *Db, entry_id: i64, action_user_id: i64) !void {
     const now = std.Io.Timestamp.now(io, .real);
     const deleted_at = now.toSeconds();
 
@@ -160,7 +160,7 @@ pub fn delete(io: std.Io, db: *Db, entry_id: i64, viewer_user_id: i64) !void {
     try stmt.exec(.{}, .{
         .deleted_at = deleted_at,
         .entry_id = entry_id,
-        .viewer_user_id = viewer_user_id,
+        .viewer_user_id = action_user_id,
     });
 
     if (db.rowsAffected() == 0) {
@@ -191,9 +191,28 @@ pub fn hide(io: std.Io, db: *Db, entry_id: i64) !void {
     }
 }
 
+pub fn unhide(db: *Db, entry_id: i64) !void {
+    const query = (
+        \\UPDATE flight_log_entries
+        \\SET hidden_at = NULL
+        \\WHERE entry_id = :entry_id{i64}
+    );
+
+    var stmt = try db.prepare(query);
+    defer stmt.deinit();
+
+    try stmt.exec(.{}, .{
+        .entry_id = entry_id,
+    });
+
+    if (db.rowsAffected() == 0) {
+        return error.EntryNotFound;
+    }
+}
+
 pub fn like(db: *Db, entry_id: i64, viewer_user_id: i64) !void {
     const query = (
-        \\INSERT INTO flight_log_entry_likes(entry_id, user_id)
+        \\INSERT OR IGNORE INTO flight_log_entry_likes(entry_id, user_id)
         \\VALUES (:entry_id{i64}, :viewer_user_id{i64})
         \\ON CONFLICT(entry_id, user_id) DO NOTHING
     );
@@ -208,5 +227,24 @@ pub fn like(db: *Db, entry_id: i64, viewer_user_id: i64) !void {
 
     if (db.rowsAffected() == 0) {
         return error.EntryNotFoundOrAlreadyLiked;
+    }
+}
+
+pub fn unlike(db: *Db, entry_id: i64, viewer_user_id: i64) !void {
+    const query = (
+        \\DELETE FROM flight_log_entry_likes
+        \\WHERE entry_id = :entry_id{i64} AND user_id = :viewer_user_id{i64}
+    );
+
+    var stmt = try db.prepare(query);
+    defer stmt.deinit();
+
+    try stmt.exec(.{}, .{
+        .entry_id = entry_id,
+        .viewer_user_id = viewer_user_id,
+    });
+
+    if (db.rowsAffected() == 0) {
+        return error.EntryNotFoundOrNotLiked;
     }
 }

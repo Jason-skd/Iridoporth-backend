@@ -1,26 +1,24 @@
 const std = @import("std");
+const Allocator = std.mem.Allocator;
 
 const zap = @import("zap");
 
-const Context = @import("../context.zig");
+const Context = @import("../../context.zig");
 
-const request_user_http = @import("../http/request_user.zig");
+const request_user_http = @import("../../http/request_user.zig");
 
-const response_http = @import("../http/response.zig");
+const response_http = @import("../../http/response.zig");
 
-const flight_log_repository = @import("../repositories/flight_log.zig");
+const flight_log_repository = @import("../../repositories/flight_log.zig");
 
-const flight_log_service = @import("../services/flight_log.zig");
+const flight_log_service = @import("../../services/flight_log.zig");
 
-const flight_log_api = @import("../api/flight_log.zig");
+const flight_log_api = @import("../../api/flight_log.zig");
 const FlightLogListResponse = flight_log_api.FlightLogListResponse;
 const FlightLogPostRequest = flight_log_api.FlightLogPostRequest;
 const FlightLogPostResponse = flight_log_api.FlightLogPostResponse;
 
-const FlightLogEndpoint = @This();
-
-path: []const u8 = "/api/v1/flight-log",
-error_strategy: zap.Endpoint.ErrorStrategy = .log_to_console,
+const FlightLogEndpoint = @import("dispatcher.zig");
 
 pub fn get(
     _: *FlightLogEndpoint,

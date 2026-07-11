@@ -3,7 +3,7 @@ const Allocator = std.mem.Allocator;
 const argon2 = std.crypto.pwhash.argon2;
 
 const LoginResult = union(enum) {
-    success: u64,
+    success: i64,
     failure: void,
 };
 
