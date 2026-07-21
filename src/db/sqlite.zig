@@ -49,3 +49,20 @@ fn migrate(db: *sqlite.Db) !void {
         try db.exec("COMMIT", .{}, .{});
     }
 }
+
+pub fn openMigratedTestDb() !Db {
+    var db = try sqlite.Db.init(.{
+        .mode = .memory,
+        .open_flags = .{
+            .write = true,
+            .create = true,
+        },
+        .threading_mode = .Serialized,
+    });
+    errdefer db.deinit();
+
+    try applyPragmas(&db);
+    try migrate(&db);
+
+    return db;
+}

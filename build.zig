@@ -40,8 +40,15 @@ pub fn build(b: *std.Build) void {
 
     run_cmd.addPassthruArgs();
 
+    const test_filters = b.option(
+        []const []const u8,
+        "test-filter",
+        "Only run tests matching any filter",
+    ) orelse &.{};
+
     const exe_tests = b.addTest(.{
         .root_module = exe.root_module,
+        .filters = test_filters,
     });
 
     const run_exe_tests = b.addRunArtifact(exe_tests);
