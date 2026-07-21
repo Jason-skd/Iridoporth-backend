@@ -54,14 +54,14 @@ pub fn migrateToV1(db: *Db) !void {
         \\  creator_user_id INTEGER NOT NULL REFERENCES users(user_id) ON DELETE CASCADE,
         \\  created_at INTEGER NOT NULL,
         \\  deleted_at INTEGER,
-        \\  hidden_at INTEGER,
+        \\  hidden_at INTEGER
         \\);
     , .{});
     try db.execMulti(
         \\CREATE TABLE IF NOT EXISTS flight_log_entry_likes (
         \\  entry_id INTEGER NOT NULL REFERENCES flight_log_entries(entry_id) ON DELETE CASCADE,
         \\  user_id INTEGER NOT NULL REFERENCES users(user_id) ON DELETE CASCADE,
-        \\  created_at INTEGER NOT NULL
+        \\  created_at INTEGER NOT NULL,
         \\
         \\  PRIMARY KEY (entry_id, user_id)
         \\);

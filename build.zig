@@ -40,6 +40,16 @@ pub fn build(b: *std.Build) void {
 
     run_cmd.addPassthruArgs();
 
+    const test_module = b.createModule(.{
+        .root_source_file = b.path("src/tests.zig"),
+        .target = target,
+        .optimize = optimize,
+        .imports = &.{
+            .{ .name = "zap", .module = zap },
+            .{ .name = "sqlite", .module = sqlite },
+        },
+    });
+
     const test_filters = b.option(
         []const []const u8,
         "test-filter",
@@ -47,7 +57,7 @@ pub fn build(b: *std.Build) void {
     ) orelse &.{};
 
     const exe_tests = b.addTest(.{
-        .root_module = exe.root_module,
+        .root_module = test_module,
         .filters = test_filters,
     });
 
