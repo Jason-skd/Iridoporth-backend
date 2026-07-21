@@ -52,7 +52,7 @@ fn migrate(db: *sqlite.Db) !void {
 
 pub fn openMigratedTestDb() !Db {
     var db = try sqlite.Db.init(.{
-        .mode = .memory,
+        .mode = .Memory,
         .open_flags = .{
             .write = true,
             .create = true,

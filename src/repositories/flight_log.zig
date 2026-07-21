@@ -11,7 +11,7 @@ const FlightLogListItem = flight_log_domain.FlightLogListItem;
 
 pub fn listAll(allocator: Allocator, db: *Db, viewer_user_id: ?i64) ![]FlightLogListItem {
     const query = (
-        \\WITH params(viwer_user_id) AS (
+        \\WITH params(viewer_user_id) AS (
         \\  SELECT :viewer_user_id{?i64}
         \\)
         \\SELECT
@@ -19,26 +19,25 @@ pub fn listAll(allocator: Allocator, db: *Db, viewer_user_id: ?i64) ![]FlightLog
         \\  e.content,
         \\  e.response,
         \\  e.responded_at,
-        \\  e.creator_user_id,
-        \\CASE
-        \\  WHEN u.kind = 'anonymous' THEN 'Anonymous'
-        \\  ELSE u.name
-        \\END AS callsign,
-        \\e.created_at,
-        \\COUNT(l.user_id) AS likes,
-        \\CASE
-        \\  WHEN p.viewer_user_id IS NULL THEN 0
-        \\  WHEN EXISTS (
-        \\    SELECT 1
-        \\    FROM flight_log_entry_likes mine
-        \\    WHERE mine.entry_id = e.entry_id AND mine.user_id = p.viewer_user_id
-        \\  ) THEN 1 
-        \\  ELSE 0
-        \\END AS liked_by_this_user,
-        \\CASE
-        \\  WHEN p.viewer_user_id IS NOT NULL AND e.creator_user_id = p.viewer_user_id THEN 1
-        \\  ELSE 0
-        \\END AS created_by_this_user,
+        \\  CASE
+        \\    WHEN u.kind = 'anonymous' THEN 'Anonymous'
+        \\    ELSE u.name
+        \\  END AS callsign,
+        \\  e.created_at,
+        \\  CASE
+        \\    WHEN p.viewer_user_id IS NOT NULL AND e.creator_user_id = p.viewer_user_id THEN 1
+        \\    ELSE 0
+        \\  END AS created_by_this_user,
+        \\  COUNT(l.user_id) AS likes,
+        \\  CASE
+        \\    WHEN p.viewer_user_id IS NULL THEN 0
+        \\    WHEN EXISTS (
+        \\      SELECT 1
+        \\      FROM flight_log_entry_likes mine
+        \\      WHERE mine.entry_id = e.entry_id AND mine.user_id = p.viewer_user_id
+        \\    ) THEN 1 
+        \\    ELSE 0
+        \\  END AS liked_by_this_user
         \\FROM flight_log_entries e
         \\CROSS JOIN params p
         \\JOIN users u ON u.user_id = e.creator_user_id
@@ -51,13 +50,13 @@ pub fn listAll(allocator: Allocator, db: *Db, viewer_user_id: ?i64) ![]FlightLog
     defer stmt.deinit();
 
     const Row = struct {
-        id: i64,
+        entry_id: i64,
         content: []const u8,
         response: ?[]const u8,
         responded_at: ?i64,
         callsign: []const u8,
-        created_by_this_user: bool,
         created_at: i64,
+        created_by_this_user: bool,
         likes: i64,
         liked_by_this_user: bool,
     };
@@ -68,10 +67,10 @@ pub fn listAll(allocator: Allocator, db: *Db, viewer_user_id: ?i64) ![]FlightLog
     const list = try allocator.alloc(FlightLogListItem, rows.len);
     for (0.., rows) |i, row| {
         list[i] = FlightLogListItem{
-            .id = row.id,
+            .id = row.entry_id,
             .content = row.content,
             .response = flight_log_domain.FlightLogResponse.fromDb(
-                row.content,
+                row.response,
                 row.responded_at,
             ),
             .callsign = row.callsign,
@@ -212,10 +211,13 @@ pub fn unhide(db: *Db, entry_id: i64) !void {
     }
 }
 
-pub fn like(db: *Db, entry_id: i64, viewer_user_id: i64) !void {
+pub fn like(io: std.Io, db: *Db, entry_id: i64, viewer_user_id: i64) !void {
+    const now = std.Io.Timestamp.now(io, .real);
+    const created_at = now.toSeconds();
+
     const query = (
-        \\INSERT OR IGNORE INTO flight_log_entry_likes(entry_id, user_id)
-        \\VALUES (:entry_id{i64}, :viewer_user_id{i64})
+        \\INSERT INTO flight_log_entry_likes(entry_id, user_id, created_at)
+        \\VALUES (:entry_id{i64}, :viewer_user_id{i64}, :created_at{i64})
         \\ON CONFLICT(entry_id, user_id) DO NOTHING
     );
 
@@ -225,6 +227,7 @@ pub fn like(db: *Db, entry_id: i64, viewer_user_id: i64) !void {
     try stmt.exec(.{}, .{
         .entry_id = entry_id,
         .viewer_user_id = viewer_user_id,
+        .created_at = created_at,
     });
 
     if (db.rowsAffected() == 0) {
@@ -275,7 +278,7 @@ test "listAll returns visible entries with viewer state" {
     defer arena.deinit();
 
     var db = try sqlite_adapter.openMigratedTestDb();
-    defer db.init();
+    defer db.deinit();
 
     try seedFlightLogListData(&db);
 
@@ -329,5 +332,52 @@ test "listAll returns visible entries with viewer state" {
     try std.testing.expectEqual(
         flight_log_domain.FlightLogResponseTag.None,
         std.meta.activeTag(second_entry.response),
+    );
+}
+
+test "like increments likes and sets liked_by_this_user while unlike decreases" {
+    var threaded = std.Io.Threaded.init(std.testing.allocator, .{});
+    defer threaded.deinit();
+    const io = threaded.io();
+
+    var arena = std.heap.ArenaAllocator.init(std.testing.allocator);
+    defer arena.deinit();
+
+    var db = try sqlite_adapter.openMigratedTestDb();
+    defer db.deinit();
+
+    try seedFlightLogListData(&db);
+
+    try like(io, &db, 2, 1);
+
+    const entries = try listAll(
+        arena.allocator(),
+        &db,
+        1,
+    );
+
+    const liked_entry = entries[0];
+    try std.testing.expectEqual(@as(i64, 1), liked_entry.likes);
+    try std.testing.expect(liked_entry.liked_by_this_user);
+
+    try std.testing.expectError(
+        error.EntryNotFoundOrAlreadyLiked,
+        like(io, &db, 2, 1),
+    );
+
+    try unlike(&db, 2, 1);
+
+    const unliked_entries = try listAll(
+        arena.allocator(),
+        &db,
+        1,
+    );
+    const unliked_entry = unliked_entries[0];
+    try std.testing.expectEqual(@as(i64, 0), unliked_entry.likes);
+    try std.testing.expect(!unliked_entry.liked_by_this_user);
+
+    try std.testing.expectError(
+        error.EntryNotFoundOrNotLiked,
+        unlike(&db, 2, 1),
     );
 }
