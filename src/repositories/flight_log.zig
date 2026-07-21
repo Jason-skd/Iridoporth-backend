@@ -4,6 +4,8 @@ const Allocator = std.mem.Allocator;
 const sqlite = @import("sqlite");
 const Db = sqlite.Db;
 
+const sqlite_adapter = @import("../db/sqlite.zig");
+
 const flight_log_domain = @import("../domain/flight_log.zig");
 const FlightLogListItem = flight_log_domain.FlightLogListItem;
 
@@ -247,4 +249,85 @@ pub fn unlike(db: *Db, entry_id: i64, viewer_user_id: i64) !void {
     if (db.rowsAffected() == 0) {
         return error.EntryNotFoundOrNotLiked;
     }
+}
+
+fn seedFlightLogListData(db: *Db) !void {
+    try db.execMulti(
+        \\INSERT INTO users(user_id, kind, role, name, email, created_at, updated_at, last_seen_at)
+        \\VALUES
+        \\  (1, 'anonymous', 'user', NULL, NULL, 10, 10, 10),
+        \\  (2, 'account', 'user', 'Maverick', 'maverick@example.com', 20, 20, 20);
+        \\
+        \\INSERT INTO flight_log_entries(entry_id, content, response, responded_at, creator_user_id, created_at, deleted_at, hidden_at)
+        \\VALUES
+        \\  (1, 'Pattern entry', NULL, NULL, 1, 100, NULL, NULL),
+        \\  (2, 'Holding short final', 'Copy that', 250, 2, 200, NULL, NULL),
+        \\  (3, 'Deleted entry', NULL, NULL, 1, 300, 301, NULL),
+        \\  (4, 'Hidden entry', NULL, NULL, 1, 400, NULL, 401);
+        \\
+        \\INSERT INTO flight_log_entry_likes(entry_id, user_id, created_at)
+        \\VALUES (1, 2, 150);
+    , .{});
+}
+
+test "listAll returns visible entries with viewer state" {
+    var arena = std.heap.ArenaAllocator.init(std.testing.allocator);
+    defer arena.deinit();
+
+    var db = try sqlite_adapter.openMigratedTestDb();
+    defer db.init();
+
+    try seedFlightLogListData(&db);
+
+    const viewer_user_id: i64 = 2;
+    const entries = try listAll(
+        arena.allocator(),
+        &db,
+        viewer_user_id,
+    );
+
+    try std.testing.expectEqual(@as(usize, 2), entries.len);
+
+    const first_entry = entries[0];
+    try std.testing.expectEqual(@as(i64, 2), first_entry.id);
+    try std.testing.expectEqualStrings(
+        "Holding short final",
+        first_entry.content,
+    );
+    try std.testing.expectEqualStrings("Maverick", first_entry.callsign);
+    try std.testing.expect(first_entry.created_by_this_user);
+    try std.testing.expectEqual(@as(i64, 200), first_entry.created_at);
+    try std.testing.expectEqual(@as(i64, 0), first_entry.likes);
+    try std.testing.expect(!first_entry.liked_by_this_user);
+    try std.testing.expectEqual(
+        flight_log_domain.FlightLogResponseTag.Response,
+        std.meta.activeTag(first_entry.response),
+    );
+    try std.testing.expectEqualStrings(
+        "Copy that",
+        first_entry.response.Response.content,
+    );
+    try std.testing.expectEqual(
+        @as(i64, 250),
+        first_entry.response.Response.responded_at,
+    );
+
+    const second_entry = entries[1];
+    try std.testing.expectEqual(@as(i64, 1), second_entry.id);
+    try std.testing.expectEqualStrings(
+        "Pattern entry",
+        second_entry.content,
+    );
+    try std.testing.expectEqualStrings(
+        "Anonymous",
+        second_entry.callsign,
+    );
+    try std.testing.expect(!second_entry.created_by_this_user);
+    try std.testing.expectEqual(@as(i64, 100), second_entry.created_at);
+    try std.testing.expectEqual(@as(i64, 1), second_entry.likes);
+    try std.testing.expect(second_entry.liked_by_this_user);
+    try std.testing.expectEqual(
+        flight_log_domain.FlightLogResponseTag.None,
+        std.meta.activeTag(second_entry.response),
+    );
 }
