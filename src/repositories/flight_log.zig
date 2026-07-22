@@ -335,11 +335,7 @@ test "listAll returns visible entries with viewer state" {
     );
 }
 
-test "like increments likes and sets liked_by_this_user while unlike decreases" {
-    var threaded = std.Io.Threaded.init(std.testing.allocator, .{});
-    defer threaded.deinit();
-    const io = threaded.io();
-
+test "insert create entry and could be retrieved by listAll" {
     var arena = std.heap.ArenaAllocator.init(std.testing.allocator);
     defer arena.deinit();
 
@@ -348,7 +344,60 @@ test "like increments likes and sets liked_by_this_user while unlike decreases" 
 
     try seedFlightLogListData(&db);
 
-    try like(io, &db, 2, 1);
+    const anonymous_content = "Anonymous entry";
+    const anonymous_creator_user_id: i64 = 1;
+    var result = try insert(
+        std.testing.io,
+        arena.allocator(),
+        &db,
+        anonymous_content,
+        anonymous_creator_user_id,
+    );
+
+    try std.testing.expectEqual(@as(i64, 5), result.id);
+
+    var entries = try listAll(
+        arena.allocator(),
+        &db,
+        anonymous_creator_user_id,
+    );
+    var new_entry = entries[0];
+    try std.testing.expectEqual(result.id, new_entry.id);
+    try std.testing.expectEqualStrings(anonymous_content, new_entry.content);
+    try std.testing.expectEqualStrings("Anonymous", new_entry.callsign);
+    try std.testing.expectEqual(@as(i64, result.created_at), new_entry.created_at);
+    try std.testing.expect(new_entry.created_by_this_user);
+
+    const account_content = "Account entry";
+    const account_creator_user_id: i64 = 2;
+    result = try insert(
+        std.testing.io,
+        arena.allocator(),
+        &db,
+        account_content,
+        account_creator_user_id,
+    );
+
+    entries = try listAll(
+        arena.allocator(),
+        &db,
+        account_creator_user_id,
+    );
+    new_entry = entries[0];
+    try std.testing.expectEqual(result.id, new_entry.id);
+    try std.testing.expectEqualStrings("Maverick", new_entry.callsign);
+}
+
+test "like increments likes and sets liked_by_this_user while unlike decreases" {
+    var arena = std.heap.ArenaAllocator.init(std.testing.allocator);
+    defer arena.deinit();
+
+    var db = try sqlite_adapter.openMigratedTestDb();
+    defer db.deinit();
+
+    try seedFlightLogListData(&db);
+
+    try like(std.testing.io, &db, 2, 1);
 
     const entries = try listAll(
         arena.allocator(),
@@ -362,7 +411,7 @@ test "like increments likes and sets liked_by_this_user while unlike decreases" 
 
     try std.testing.expectError(
         error.EntryNotFoundOrAlreadyLiked,
-        like(io, &db, 2, 1),
+        like(std.testing.io, &db, 2, 1),
     );
 
     try unlike(&db, 2, 1);
