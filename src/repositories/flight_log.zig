@@ -388,6 +388,30 @@ test "insert create entry and could be retrieved by listAll" {
     try std.testing.expectEqualStrings("Maverick", new_entry.callsign);
 }
 
+test "delete removes entry and guest can't remove owner's entry" {
+    var arena = std.heap.ArenaAllocator.init(std.testing.allocator);
+    defer arena.deinit();
+
+    var db = try sqlite_adapter.openMigratedTestDb();
+    defer db.deinit();
+
+    try seedFlightLogListData(&db);
+
+    try delete(std.testing.io, &db, 1, 1);
+    const entries = try listAll(
+        arena.allocator(),
+        &db,
+        1,
+    );
+    try std.testing.expectEqual(@as(usize, 1), entries.len);
+    try std.testing.expectEqual(@as(i64, 2), entries[0].id);
+
+    try std.testing.expectError(
+        error.EntryNotFoundOrNotOwnedByUser,
+        delete(std.testing.io, &db, 2, 1),
+    );
+}
+
 test "like increments likes and sets liked_by_this_user while unlike decreases" {
     var arena = std.heap.ArenaAllocator.init(std.testing.allocator);
     defer arena.deinit();

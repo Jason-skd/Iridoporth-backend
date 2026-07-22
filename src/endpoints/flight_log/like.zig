@@ -37,7 +37,7 @@ pub fn post(
 
     r.setHeader("Content-Type", "application/json") catch {};
 
-    try flight_log_repository.like(&ctx.db, params.entry_id, viewer_user_id);
+    try flight_log_repository.like(ctx.io, &ctx.db, params.entry_id, viewer_user_id);
 
     const response = FlightLogActionResponse{
         .data = .{},
