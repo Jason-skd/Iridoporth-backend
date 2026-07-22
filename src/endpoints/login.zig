@@ -37,7 +37,7 @@ pub fn post(
     );
 
     const login_result = try login_service.login(
-        &ctx.io,
+        ctx.io,
         arena,
         &ctx.db,
         parsed.value.email,
@@ -49,6 +49,7 @@ pub fn post(
             try request_user_http.setSessionForAccount(
                 ctx.io,
                 arena,
+                &ctx.db,
                 r,
                 user_id,
             );
