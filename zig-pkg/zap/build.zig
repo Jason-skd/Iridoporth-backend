@@ -7,7 +7,7 @@ const TestSystem = struct {
     b: *std.Build,
     zap_module: *std.Build.Module,
     target: std.Build.ResolvedTarget,
-    optimize: std.builtin.OptimizeMode,
+    optimize: std.builtin.Optimize,
     combine_test_step: *std.Build.Step,
 
     pub fn addTest(self: TestSystem, root_src: []const u8, test_name: []const u8) void {
