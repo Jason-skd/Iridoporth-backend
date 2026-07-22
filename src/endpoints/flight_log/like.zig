@@ -9,7 +9,7 @@ const flight_log_repository = @import("../../repositories/flight_log.zig");
 
 const request_user_http = @import("../../http/request_user.zig");
 
-const responst_http = @import("../../http/response.zig");
+const response_http = @import("../../http/response.zig");
 
 const flight_log_api = @import("../../api/flight_log.zig");
 const FlightLogActionResponse = flight_log_api.FlightLogActionResponse;
@@ -43,7 +43,7 @@ pub fn post(
         .data = .{},
     };
 
-    try responst_http.stringifyAndSendResponse(
+    try response_http.stringifyAndSendResponse(
         FlightLogActionResponse,
         arena,
         r,
@@ -74,7 +74,7 @@ pub fn delete(
         .data = .{},
     };
 
-    try responst_http.stringifyAndSendResponse(
+    try response_http.stringifyAndSendResponse(
         FlightLogActionResponse,
         arena,
         r,
