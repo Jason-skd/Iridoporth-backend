@@ -22,14 +22,18 @@ pub fn main(init: std.process.Init) !void {
 
     const config = try loadConfig(init);
 
-    var app_context = try initContext(gpa_allocator, init.io, config.db_path);
+    try std.Io.Dir.cwd().createDirPath(init.io, "data");
+
+    var app_context = try initContext(
+        gpa_allocator,
+        init.io,
+        config.db_path,
+    );
     defer app_context.deinit();
 
     try startDetachedStatusSampler(&app_context);
 
-    try App.init(gpa_allocator, &app_context, .{
-        .default_error_strategy = .log_to_response,
-    });
+    try App.init(gpa_allocator, &app_context, .{});
     defer App.deinit();
 
     var endpoints = Endpoints{};
@@ -58,16 +62,22 @@ fn loadConfig(init: std.process.Init) !Config {
 }
 
 fn initContext(allocator: Allocator, io: std.Io, db_path: []const u8) !Context {
-    const db_path_sentinel = try allocator.dupeSentinel(u8, db_path, 0);
+    const db_path_sentinel = try allocator.dupeSentinel(
+        u8,
+        db_path,
+        0,
+    );
     defer allocator.free(db_path_sentinel);
 
     return try Context.init(io, allocator, db_path_sentinel);
 }
 
 fn startDetachedStatusSampler(ctx: *Context) !void {
-    const sampler_thread = try std.Thread.spawn(.{}, raspi_status_service.runStatusSampler, .{
-        ctx,
-    });
+    const sampler_thread = try std.Thread.spawn(
+        .{},
+        raspi_status_service.runStatusSampler,
+        .{ctx},
+    );
     sampler_thread.detach();
 }
 
