@@ -9,6 +9,9 @@ const flight_log_repository = @import("../../repositories/flight_log.zig");
 
 const request_user_http = @import("../../http/request_user.zig");
 
+const api_error = @import("../../http/api_error.zig");
+const APIError = api_error.Error;
+
 const response_http = @import("../../http/response.zig");
 
 const flight_log_api = @import("../../api/flight_log.zig");
@@ -47,15 +50,36 @@ pub fn patch(
                 r,
             );
 
-            try flight_log_repository.delete(ctx.io, &ctx.db, params.entry_id, actor_user_id);
+            const success = try flight_log_repository.delete(
+                ctx.io,
+                &ctx.db,
+                params.entry_id,
+                actor_user_id,
+            );
+            if (!success) {
+                return APIError.ApiFlightLogNotFound;
+            }
         } else return error.InvalidRequest;
     } else if (parsed.value.is_hidden) |is_hidden| {
         _ = try request_user_http.requireAdmin(arena, &ctx.db, r);
 
         if (is_hidden == true) {
-            try flight_log_repository.hide(ctx.io, &ctx.db, params.entry_id);
+            const success = try flight_log_repository.hide(
+                ctx.io,
+                &ctx.db,
+                params.entry_id,
+            );
+            if (!success) {
+                return APIError.ApiFlightLogNotFound;
+            }
         } else {
-            try flight_log_repository.unhide(&ctx.db, params.entry_id);
+            const success = try flight_log_repository.unhide(
+                &ctx.db,
+                params.entry_id,
+            );
+            if (!success) {
+                return APIError.ApiFlightLogNotFound;
+            }
         }
     }
 
