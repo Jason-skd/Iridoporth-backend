@@ -24,6 +24,31 @@ pub const Params = struct {
     entry_id: i64,
 };
 
+const PatchAction = enum {
+    delete,
+    hide,
+    unhide,
+};
+
+fn parseAction(request: FlightLogPatchRequest) APIError!PatchAction {
+    if (request.is_deleted != null and request.is_hidden != null) {
+        return APIError.APIInvalidRequest;
+    }
+
+    if (request.is_deleted) |is_deleted| {
+        if (!is_deleted) {
+            return APIError.APIInvalidRequest;
+        }
+        return .delete;
+    }
+
+    if (request.is_hidden) |is_hidden| {
+        return if (is_hidden) .hide else .unhide;
+    }
+
+    return APIError.APIInvalidRequest;
+}
+
 pub fn patch(
     _: *FlightLogEndpoint,
     arena: Allocator,
@@ -43,46 +68,52 @@ pub fn patch(
         return APIError.APIInvalidRequest;
     };
 
-    if (parsed.value.is_deleted) |is_deleted| {
-        if (is_deleted == true) {
-            const actor_user_id: i64 = try request_user_http.requireUserIdOrCreateAnonymous(
+    const action = try parseAction(parsed.value);
+    var success: bool = undefined;
+    switch (action) {
+        .delete => {
+            const viewer_user_id = try request_user_http.requireUserIdOrCreateAnonymous(
                 ctx.io,
-                arena,
+                ctx.allocator,
                 &ctx.db,
                 r,
             );
 
-            const success = try flight_log_repository.delete(
+            success = try flight_log_repository.delete(
                 ctx.io,
                 &ctx.db,
                 params.entry_id,
-                actor_user_id,
+                viewer_user_id,
             );
-            if (!success) {
-                return APIError.APIFlightLogNotFound;
-            }
-        } else return APIError.APIInvalidRequest;
-    } else if (parsed.value.is_hidden) |is_hidden| {
-        _ = try request_user_http.requireAdmin(arena, &ctx.db, r);
+        },
+        .hide => {
+            _ = try request_user_http.requireAdmin(
+                ctx.allocator,
+                &ctx.db,
+                r,
+            );
 
-        if (is_hidden == true) {
-            const success = try flight_log_repository.hide(
+            success = try flight_log_repository.hide(
                 ctx.io,
                 &ctx.db,
                 params.entry_id,
             );
-            if (!success) {
-                return APIError.APIFlightLogNotFound;
-            }
-        } else {
-            const success = try flight_log_repository.unhide(
+        },
+        .unhide => {
+            _ = try request_user_http.requireAdmin(
+                ctx.allocator,
+                &ctx.db,
+                r,
+            );
+
+            success = try flight_log_repository.unhide(
                 &ctx.db,
                 params.entry_id,
             );
-            if (!success) {
-                return APIError.APIFlightLogNotFound;
-            }
-        }
+        },
+    }
+    if (!success) {
+        return APIError.APIFlightLogNotFound;
     }
 
     const response = FlightLogActionResponse{
@@ -95,5 +126,65 @@ pub fn patch(
         r,
         std.http.Status.ok,
         response,
+    );
+}
+
+test "parseAction accepts exactly one supported action" {
+    try std.testing.expectEqual(
+        PatchAction.delete,
+        try parseAction(.{
+            .is_deleted = true,
+            .is_hidden = null,
+        }),
+    );
+
+    try std.testing.expectEqual(
+        PatchAction.hide,
+        try parseAction(.{
+            .is_deleted = null,
+            .is_hidden = true,
+        }),
+    );
+
+    try std.testing.expectEqual(
+        PatchAction.unhide,
+        try parseAction(.{
+            .is_deleted = null,
+            .is_hidden = false,
+        }),
+    );
+}
+
+test "parseAction rejects missing, ambiguous, and invalid actions" {
+    try std.testing.expectError(
+        APIError.APIInvalidRequest,
+        parseAction(.{
+            .is_deleted = null,
+            .is_hidden = null,
+        }),
+    );
+
+    try std.testing.expectError(
+        APIError.APIInvalidRequest,
+        parseAction(.{
+            .is_deleted = false,
+            .is_hidden = null,
+        }),
+    );
+
+    try std.testing.expectError(
+        APIError.APIInvalidRequest,
+        parseAction(.{
+            .is_deleted = true,
+            .is_hidden = true,
+        }),
+    );
+
+    try std.testing.expectError(
+        APIError.APIInvalidRequest,
+        parseAction(.{
+            .is_deleted = true,
+            .is_hidden = false,
+        }),
     );
 }

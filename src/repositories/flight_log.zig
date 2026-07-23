@@ -143,7 +143,7 @@ pub fn respond(
     return db.rowsAffected() != 0;
 }
 
-pub fn delete(io: std.Io, db: *Db, entry_id: i64, action_user_id: i64) !bool {
+pub fn delete(io: std.Io, db: *Db, entry_id: i64, viewer_user_id: i64) !bool {
     const now = std.Io.Timestamp.now(io, .real);
     const deleted_at = now.toSeconds();
 
@@ -159,7 +159,7 @@ pub fn delete(io: std.Io, db: *Db, entry_id: i64, action_user_id: i64) !bool {
     try stmt.exec(.{}, .{
         .deleted_at = deleted_at,
         .entry_id = entry_id,
-        .viewer_user_id = action_user_id,
+        .viewer_user_id = viewer_user_id,
     });
 
     return db.rowsAffected() != 0;
