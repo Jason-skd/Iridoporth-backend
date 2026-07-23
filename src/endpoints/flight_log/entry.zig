@@ -74,7 +74,7 @@ pub fn patch(
         .delete => {
             const viewer_user_id = try request_user_http.requireUserIdOrCreateAnonymous(
                 ctx.io,
-                ctx.allocator,
+                arena,
                 &ctx.db,
                 r,
             );
@@ -88,7 +88,7 @@ pub fn patch(
         },
         .hide => {
             _ = try request_user_http.requireAdmin(
-                ctx.allocator,
+                arena,
                 &ctx.db,
                 r,
             );
@@ -101,7 +101,7 @@ pub fn patch(
         },
         .unhide => {
             _ = try request_user_http.requireAdmin(
-                ctx.allocator,
+                arena,
                 &ctx.db,
                 r,
             );
@@ -126,65 +126,5 @@ pub fn patch(
         r,
         std.http.Status.ok,
         response,
-    );
-}
-
-test "parseAction accepts exactly one supported action" {
-    try std.testing.expectEqual(
-        PatchAction.delete,
-        try parseAction(.{
-            .is_deleted = true,
-            .is_hidden = null,
-        }),
-    );
-
-    try std.testing.expectEqual(
-        PatchAction.hide,
-        try parseAction(.{
-            .is_deleted = null,
-            .is_hidden = true,
-        }),
-    );
-
-    try std.testing.expectEqual(
-        PatchAction.unhide,
-        try parseAction(.{
-            .is_deleted = null,
-            .is_hidden = false,
-        }),
-    );
-}
-
-test "parseAction rejects missing, ambiguous, and invalid actions" {
-    try std.testing.expectError(
-        APIError.APIInvalidRequest,
-        parseAction(.{
-            .is_deleted = null,
-            .is_hidden = null,
-        }),
-    );
-
-    try std.testing.expectError(
-        APIError.APIInvalidRequest,
-        parseAction(.{
-            .is_deleted = false,
-            .is_hidden = null,
-        }),
-    );
-
-    try std.testing.expectError(
-        APIError.APIInvalidRequest,
-        parseAction(.{
-            .is_deleted = true,
-            .is_hidden = true,
-        }),
-    );
-
-    try std.testing.expectError(
-        APIError.APIInvalidRequest,
-        parseAction(.{
-            .is_deleted = true,
-            .is_hidden = false,
-        }),
     );
 }

@@ -47,8 +47,8 @@ pub fn post(
         parsed.value.password,
     );
 
-    const response: LoginResponse = switch (login_result) {
-        .success => |user_id| blk: {
+    switch (login_result) {
+        .success => |user_id| {
             try request_user_http.setSessionForAccount(
                 ctx.io,
                 arena,
@@ -56,26 +56,17 @@ pub fn post(
                 r,
                 user_id,
             );
-            break :blk LoginResponse{
-                .ok = true,
-                .data = .{
-                    .success = true,
-                },
-            };
+            const response: LoginResponse = .{ .data = .{ .success = true } };
+            try response_http.stringifyAndSendResponse(
+                LoginResponse,
+                arena,
+                r,
+                std.http.Status.ok,
+                response,
+            );
         },
-        .failure => .{
-            .ok = true,
-            .data = .{
-                .success = false,
-            },
+        .failure => {
+            return APIError.APIUnauthenticated;
         },
-    };
-
-    try response_http.stringifyAndSendResponse(
-        LoginResponse,
-        arena,
-        r,
-        std.http.Status.ok,
-        response,
-    );
+    }
 }
