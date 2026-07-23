@@ -7,6 +7,15 @@ const RaspiStatus = raspi_status_domain.RaspiStatus;
 
 const Context = @import("../context.zig");
 
+const MeminfoParseError = error{
+    MissingRequiredField,
+    MissingFieldValue,
+};
+
+const CpuStatParseError = error{
+    EmptyFile,
+};
+
 pub fn init(io: std.Io, allocator: Allocator) Raspi {
     const raspi_name = getName(allocator) catch |err| {
         std.debug.print("get raspi name: {}\n", .{err});
@@ -94,7 +103,7 @@ fn parseMemoryUsage(text: []const u8) !f32 {
     }
 
     if (total == null or available == null) {
-        return error.MissingVal;
+        return MeminfoParseError.MissingRequiredField;
     }
 
     return @as(f32, @floatFromInt(total.? - available.?)) / @as(f32, @floatFromInt(total.?)) * 100.0;
@@ -108,7 +117,7 @@ fn getValFromMeminfo(line: []const u8, key: []const u8) !?u64 {
     var parts = std.mem.tokenizeAny(u8, line, " \t:");
 
     _ = parts.next();
-    const value = parts.next() orelse return error.NoValForKey;
+    const value = parts.next() orelse return MeminfoParseError.MissingFieldValue;
 
     return try std.fmt.parseInt(u64, value, 10);
 }
@@ -133,7 +142,7 @@ fn parseCpuTimes(text: []const u8) !CpuTimes {
         text,
         '\n',
     );
-    const first_line = lines.next() orelse return error.BlankFile;
+    const first_line = lines.next() orelse return CpuStatParseError.EmptyFile;
     var parts = std.mem.tokenizeAny(
         u8,
         first_line,
@@ -237,12 +246,12 @@ test "getValFromMeminfo parses matching key" {
     try std.testing.expectEqual(@as(?u64, 8000000), value);
 }
 
-test "getValFromMeminfo errors when key does not match" {
+test "getValFromMeminfo errors when a matching key has no value" {
     try std.testing.expectError(
-        error.NoValForKey,
+        MeminfoParseError.MissingFieldValue,
         getValFromMeminfo(
-            "MemTotal:       8000000 kB",
-            "MemAvailable:",
+            "MemTotal:",
+            "MemTotal:",
         ),
     );
 }
@@ -258,10 +267,17 @@ test "parseMemoryUsage calculates used percentage" {
 
 test "parseMemoryUsage errors when required values are missing" {
     try std.testing.expectError(
-        error.MissingVal,
+        MeminfoParseError.MissingRequiredField,
         parseMemoryUsage(
             \\MemTotal:       1000 kB
         ),
+    );
+}
+
+test "parseCpuTimes errors for an empty file" {
+    try std.testing.expectError(
+        CpuStatParseError.EmptyFile,
+        parseCpuTimes(""),
     );
 }
 

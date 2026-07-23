@@ -6,6 +6,14 @@ const Db = sqlite.Db;
 
 const migrations = @import("migrations.zig");
 
+pub const MigrationError = error{
+    DatabaseSchemaTooNew,
+};
+
+pub const InsertReturningError = error{
+    InsertDidNotReturnRow,
+};
+
 const current_schema_version = 1;
 
 pub fn init(path: [:0]const u8) !Db {
@@ -36,7 +44,7 @@ fn migrate(db: *sqlite.Db) !void {
     const version = (try db.pragma(usize, .{}, "user_version", null)) orelse 0;
 
     if (version > current_schema_version) {
-        return error.DatabaseSchemaTooNew;
+        return MigrationError.DatabaseSchemaTooNew;
     }
 
     if (version < 1) {

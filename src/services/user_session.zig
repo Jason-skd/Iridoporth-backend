@@ -71,13 +71,13 @@ pub fn createSession(
     return new_session_token;
 }
 
-pub fn findUserId(allocator: Allocator, db: *Db, token: []const u8) !i64 {
+pub fn findUserId(allocator: Allocator, db: *Db, token: []const u8) !?i64 {
     const token_hash = user_session_domain.hashSessionToken(token);
 
     const session = try (user_session_repository.findUserSessionByTokenHash(
         db,
         allocator,
         token_hash[0..],
-    )) orelse return error.InvalidSessionToken;
+    )) orelse return null;
     return session.user_id;
 }
