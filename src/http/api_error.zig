@@ -1,11 +1,11 @@
 const std = @import("std");
 
 pub const Error = error{
-    ApiInvalidRequest,
-    ApiInvalidFlightLogEntryId,
-    ApiUnauthenticated,
-    ApiForbidden,
-    ApiFlightLogNotFound,
+    APIInvalidRequest,
+    APIInvalidFlightLogEntryId,
+    APIUnauthenticated,
+    APIForbidden,
+    APIFlightLogNotFound,
 };
 
 pub const PublicError = struct {
@@ -15,23 +15,23 @@ pub const PublicError = struct {
 
 pub fn classify(err: anyerror) ?PublicError {
     return switch (err) {
-        error.ApiInvalidRequest => .{
+        error.APIInvalidRequest => .{
             .status = .bad_request,
             .code = "invalid_request",
         },
-        error.ApiInvalidFlightLogEntryId => .{
+        error.APIInvalidFlightLogEntryId => .{
             .status = .bad_request,
             .code = "invalid_flight_log_entry_id",
         },
-        error.ApiUnauthenticated => .{
+        error.APIUnauthenticated => .{
             .status = .unauthorized,
             .code = "unauthenticated",
         },
-        error.ApiForbidden => .{
+        error.APIForbidden => .{
             .status = .forbidden,
             .code = "forbidden",
         },
-        error.ApiFlightLogNotFound => .{
+        error.APIFlightLogNotFound => .{
             .status = .not_found,
             .code = "flight_log_not_found",
         },

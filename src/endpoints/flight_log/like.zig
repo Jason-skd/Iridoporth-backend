@@ -46,7 +46,7 @@ pub fn post(
         viewer_user_id,
     );
     if (!success) {
-        return APIError.ApiFlightLogNotFound;
+        return APIError.APIFlightLogNotFound;
     }
 
     const response = FlightLogActionResponse{
@@ -84,7 +84,7 @@ pub fn delete(
         viewer_user_id,
     );
     if (!success) {
-        return APIError.ApiFlightLogNotFound;
+        return APIError.APIFlightLogNotFound;
     }
 
     const response = FlightLogActionResponse{

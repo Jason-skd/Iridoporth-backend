@@ -57,7 +57,7 @@ pub fn patch(
                 actor_user_id,
             );
             if (!success) {
-                return APIError.ApiFlightLogNotFound;
+                return APIError.APIFlightLogNotFound;
             }
         } else return error.InvalidRequest;
     } else if (parsed.value.is_hidden) |is_hidden| {
@@ -70,7 +70,7 @@ pub fn patch(
                 params.entry_id,
             );
             if (!success) {
-                return APIError.ApiFlightLogNotFound;
+                return APIError.APIFlightLogNotFound;
             }
         } else {
             const success = try flight_log_repository.unhide(
@@ -78,7 +78,7 @@ pub fn patch(
                 params.entry_id,
             );
             if (!success) {
-                return APIError.ApiFlightLogNotFound;
+                return APIError.APIFlightLogNotFound;
             }
         }
     }
