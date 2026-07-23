@@ -30,8 +30,6 @@ pub fn patch(
 ) !void {
     r.parseCookies(false);
 
-    r.setHeader("Content-Type", "application/json") catch {};
-
     const request_body = r.body orelse return error.InvalidRequest;
     const parsed = try std.json.parseFromSlice(
         FlightLogPatchRequest,
@@ -69,6 +67,7 @@ pub fn patch(
         FlightLogActionResponse,
         arena,
         r,
+        std.http.Status.ok,
         response,
     );
 }

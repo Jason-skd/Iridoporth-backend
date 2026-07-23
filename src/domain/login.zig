@@ -2,7 +2,7 @@ const std = @import("std");
 const Allocator = std.mem.Allocator;
 const argon2 = std.crypto.pwhash.argon2;
 
-const LoginResult = union(enum) {
+pub const LoginResult = union(enum) {
     success: i64,
     failure: void,
 };

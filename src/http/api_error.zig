@@ -38,3 +38,13 @@ pub fn classify(err: anyerror) ?PublicError {
         else => null,
     };
 }
+
+pub const not_found = PublicError{
+    .status = .not_found,
+    .code = "not_found",
+};
+
+pub const internal_error = PublicError{
+    .status = .internal_server_error,
+    .code = "internal_error",
+};

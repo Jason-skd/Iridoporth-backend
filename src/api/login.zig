@@ -5,5 +5,4 @@ pub const LoginRequest = struct {
 
 pub const LoginResponse = struct { ok: bool = true, data: struct {
     success: bool,
-    session_token: ?[]const u8,
 } };

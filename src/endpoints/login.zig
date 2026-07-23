@@ -24,10 +24,8 @@ pub fn post(
     _: *LoginEndpoint,
     arena: Allocator,
     ctx: *Context,
-    r: zap.request,
+    r: zap.Request,
 ) !void {
-    r.setHeader("Content-Type", "application/json") catch {};
-
     const request_body = r.body orelse return error.InvalidRequest;
     const parsed = try std.json.parseFromSlice(
         LoginRequest,
@@ -57,7 +55,6 @@ pub fn post(
                 .ok = true,
                 .data = .{
                     .success = true,
-                    .session_token = r.getCookie("session_token"),
                 },
             };
         },
@@ -65,7 +62,6 @@ pub fn post(
             .ok = true,
             .data = .{
                 .success = false,
-                .session_token = null,
             },
         },
     };
@@ -74,6 +70,7 @@ pub fn post(
         LoginResponse,
         arena,
         r,
+        std.http.Status.ok,
         response,
     );
 }
