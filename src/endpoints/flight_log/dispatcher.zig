@@ -5,6 +5,9 @@ const zap = @import("zap");
 
 const Context = @import("../../context.zig");
 
+const api_error = @import("../../http/api_error.zig");
+const APIError = api_error.Error;
+
 const base_path_endpoint = @import("base_path.zig");
 
 const entry_endpoint = @import("entry.zig");
@@ -31,40 +34,56 @@ const Route = union(enum) {
     entry_like: entry_like_endpoint.Params,
 };
 
-fn parseRoute(self: *FlightLogEndpoint, path: ?[]const u8) !Route {
+const RouteParseResult = union(enum) {
+    matched: Route,
+    not_found,
+    invalid_entry_id,
+
+    pub fn strip(self: RouteParseResult) !Route {
+        return switch (self) {
+            .matched => |route| route,
+            .not_found => APIError.APINotFound,
+            .invalid_entry_id => APIError.APIInvalidFlightLogEntryId,
+        };
+    }
+};
+
+fn parseRoute(self: *FlightLogEndpoint, path: ?[]const u8) RouteParseResult {
     const base = self.path;
-    const path_received = path orelse return error.NotFound;
+    const path_received = path orelse return .not_found;
 
     if (std.mem.eql(u8, path_received, base)) {
-        return .base;
+        return .{ .matched = .base };
     }
 
     if (!std.mem.startsWith(u8, path_received, base)) {
-        return error.NotFound;
+        return .not_found;
     }
 
     if (path_received[base.len] != '/') {
-        return error.NotFound;
+        return .not_found;
     }
 
     const rest = path_received[base.len + 1 ..];
 
     var iterator = std.mem.splitScalar(u8, rest, '/');
-    const first = iterator.next() orelse return error.NotFound;
+    const first = iterator.next() orelse return .not_found;
     if (first.len == 0) {
-        return error.NotFound;
+        return .not_found;
     }
 
-    const entry_id = try std.fmt.parseInt(i64, first, 10);
+    const entry_id = std.fmt.parseInt(i64, first, 10) catch {
+        return .invalid_entry_id;
+    };
 
     if (iterator.next()) |second| {
         if (std.mem.eql(u8, second, "like") and iterator.peek() == null) {
-            return .{ .entry_like = .{ .entry_id = entry_id } };
+            return .{ .matched = .{ .entry_like = .{ .entry_id = entry_id } } };
         }
-        return error.NotFound;
+        return .not_found;
     }
 
-    return .{ .entry = .{ .entry_id = entry_id } };
+    return .{ .matched = .{ .entry = .{ .entry_id = entry_id } } };
 }
 
 pub fn get(
@@ -73,10 +92,10 @@ pub fn get(
     ctx: *Context,
     r: zap.Request,
 ) !void {
-    const route = try parseRoute(self, r.path);
+    const route = try parseRoute(self, r.path).strip();
     return switch (route) {
         .base => base_path_endpoint.get(self, arena, ctx, r),
-        else => error.NotFound,
+        else => APIError.APINotFound,
     };
 }
 
@@ -86,7 +105,7 @@ pub fn post(
     ctx: *Context,
     r: zap.Request,
 ) !void {
-    const route = try parseRoute(self, r.path);
+    const route = try parseRoute(self, r.path).strip();
     return switch (route) {
         .base => base_path_endpoint.post(self, arena, ctx, r),
         .entry_like => |params| entry_like_endpoint.post(
@@ -96,7 +115,7 @@ pub fn post(
             r,
             params,
         ),
-        else => error.NotFound,
+        else => APIError.APINotFound,
     };
 }
 
@@ -106,7 +125,7 @@ pub fn patch(
     ctx: *Context,
     r: zap.Request,
 ) !void {
-    const route = try parseRoute(self, r.path);
+    const route = try parseRoute(self, r.path).strip();
     return switch (route) {
         .entry => |params| entry_endpoint.patch(
             self,
@@ -115,7 +134,7 @@ pub fn patch(
             r,
             params,
         ),
-        else => error.NotFound,
+        else => APIError.APINotFound,
     };
 }
 
@@ -125,7 +144,7 @@ pub fn delete(
     ctx: *Context,
     r: zap.Request,
 ) !void {
-    const route = try parseRoute(self, r.path);
+    const route = try parseRoute(self, r.path).strip();
     return switch (route) {
         .entry_like => |params| entry_like_endpoint.delete(
             self,
@@ -134,48 +153,43 @@ pub fn delete(
             r,
             params,
         ),
-        else => error.NotFound,
+        else => APIError.APINotFound,
     };
 }
 
 test "parseRoute split the path and dispatch" {
-    const Expected = union(enum) {
-        ok: Route,
-        err: anyerror,
-    };
-
     const cases = [_]struct {
         name: []const u8,
         path: ?[]const u8,
-        expected: Expected,
+        expected: RouteParseResult,
     }{ .{
         .name = "base path",
         .path = "/api/v1/flight-log",
-        .expected = .{ .ok = Route.base },
+        .expected = .{ .matched = .base },
     }, .{
         .name = "entry path",
         .path = "/api/v1/flight-log/31",
-        .expected = .{ .ok = Route{ .entry = .{ .entry_id = 31 } } },
+        .expected = .{ .matched = .{ .entry = .{ .entry_id = 31 } } },
     }, .{
         .name = "like path",
         .path = "/api/v1/flight-log/11/like",
-        .expected = .{ .ok = Route{ .entry_like = .{ .entry_id = 11 } } },
+        .expected = .{ .matched = .{ .entry_like = .{ .entry_id = 11 } } },
     }, .{
         .name = "not this base",
         .path = "/api/v1/flight-log-foo",
-        .expected = .{ .err = error.NotFound },
+        .expected = .not_found,
     }, .{
         .name = "short path",
         .path = "/api/v1/flight",
-        .expected = .{ .err = error.NotFound },
+        .expected = .not_found,
     }, .{
         .name = "missing path",
         .path = null,
-        .expected = .{ .err = error.NotFound },
+        .expected = .not_found,
     }, .{
         .name = "invalid id",
         .path = "/api/v1/flight-log/like",
-        .expected = .{ .err = error.InvalidCharacter },
+        .expected = .invalid_entry_id,
     } };
 
     var endpoint = FlightLogEndpoint{};
@@ -183,16 +197,6 @@ test "parseRoute split the path and dispatch" {
     for (cases) |case| {
         const result = endpoint.parseRoute(case.path);
 
-        switch (case.expected) {
-            .ok => |expected| try std.testing.expectEqualDeep(
-                expected,
-                try result,
-            ),
-            .err => |expected| if (result) |_| {
-                return error.TestExpectedError;
-            } else |actual| {
-                try std.testing.expectEqual(expected, actual);
-            },
-        }
+        try std.testing.expectEqualDeep(case.expected, result);
     }
 }

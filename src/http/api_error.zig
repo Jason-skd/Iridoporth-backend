@@ -2,9 +2,10 @@ const std = @import("std");
 
 pub const Error = error{
     APIInvalidRequest,
-    APIInvalidFlightLogEntryId,
+    APINotFound,
     APIUnauthenticated,
     APIForbidden,
+    APIInvalidFlightLogEntryId,
     APIFlightLogNotFound,
 };
 
@@ -19,10 +20,7 @@ pub fn classify(err: anyerror) ?PublicError {
             .status = .bad_request,
             .code = "invalid_request",
         },
-        error.APIInvalidFlightLogEntryId => .{
-            .status = .bad_request,
-            .code = "invalid_flight_log_entry_id",
-        },
+        error.APINotFound => not_found,
         error.APIUnauthenticated => .{
             .status = .unauthorized,
             .code = "unauthenticated",
@@ -30,6 +28,10 @@ pub fn classify(err: anyerror) ?PublicError {
         error.APIForbidden => .{
             .status = .forbidden,
             .code = "forbidden",
+        },
+        error.APIInvalidFlightLogEntryId => .{
+            .status = .bad_request,
+            .code = "invalid_flight_log_entry_id",
         },
         error.APIFlightLogNotFound => .{
             .status = .not_found,
