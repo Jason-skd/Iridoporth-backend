@@ -34,12 +34,14 @@ pub fn patch(
     r.parseCookies(false);
 
     const request_body = r.body orelse return APIError.APIInvalidRequest;
-    const parsed = try std.json.parseFromSlice(
+    const parsed = std.json.parseFromSlice(
         FlightLogPatchRequest,
         arena,
         request_body,
         .{},
-    );
+    ) catch {
+        return APIError.APIInvalidRequest;
+    };
 
     if (parsed.value.is_deleted) |is_deleted| {
         if (is_deleted == true) {

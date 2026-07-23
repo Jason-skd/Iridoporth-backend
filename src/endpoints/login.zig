@@ -30,12 +30,14 @@ pub fn post(
     r: zap.Request,
 ) !void {
     const request_body = r.body orelse return APIError.APIInvalidRequest;
-    const parsed = try std.json.parseFromSlice(
+    const parsed = std.json.parseFromSlice(
         LoginRequest,
         arena,
         request_body,
         .{},
-    );
+    ) catch {
+        return APIError.APIInvalidRequest;
+    };
 
     const login_result = try login_service.login(
         ctx.io,
