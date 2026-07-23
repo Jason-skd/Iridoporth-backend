@@ -65,19 +65,22 @@ pub fn post(
     r: zap.Request,
 ) !void {
     r.parseCookies(false);
+
+    const request_body = r.body orelse return APIError.APIInvalidRequest;
+    const parsed = std.json.parseFromSlice(
+        FlightLogPostRequest,
+        arena,
+        request_body,
+        .{},
+    ) catch {
+        return APIError.APIInvalidRequest;
+    };
+
     const creator_user_id: i64 = try request_user_http.requireUserIdOrCreateAnonymous(
         ctx.io,
         arena,
         &ctx.db,
         r,
-    );
-
-    const request_body = r.body orelse return APIError.APIInvalidRequest;
-    const parsed = try std.json.parseFromSlice(
-        FlightLogPostRequest,
-        arena,
-        request_body,
-        .{},
     );
 
     const result = try flight_log_repository.insert(
