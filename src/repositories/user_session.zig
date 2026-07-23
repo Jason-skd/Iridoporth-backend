@@ -4,6 +4,8 @@ const Allocator = std.mem.Allocator;
 const sqlite = @import("sqlite");
 const Db = sqlite.Db;
 
+const sqlite_adapter = @import("../db/sqlite.zig");
+
 const user_session_domain = @import("../domain/user_session.zig");
 const UserSession = user_session_domain.UserSession;
 const UserSessionDraft = user_session_domain.UserSessionDraft;
@@ -78,7 +80,7 @@ fn insertUserSession(
         .expires_at = session_draft.expires_at,
         .last_used_at = session_draft.last_used_at,
         .revoked_at = session_draft.revoked_at,
-    })) orelse return error.InsertDidNotReturnRow;
+    })) orelse return sqlite_adapter.InsertReturningError.InsertDidNotReturnRow;
 
     return .{
         .id = row.session_id,

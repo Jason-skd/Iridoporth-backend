@@ -31,19 +31,13 @@ pub fn requireUserIdOrCreateAnonymous(
     const token_cookie: ?[]const u8 = try r.getCookieStr(allocator, session_cookie_name);
 
     if (token_cookie) |token| {
-        return user_session_service.findUserId(
+        if (try user_session_service.findUserId(
             allocator,
             db,
             token,
-        ) catch |err| switch (err) {
-            error.InvalidSessionToken => createAnonymousUserIdAndSetSession(
-                io,
-                allocator,
-                db,
-                r,
-            ),
-            else => return err,
-        };
+        )) |user_id| {
+            return user_id;
+        }
     }
 
     return createAnonymousUserIdAndSetSession(io, allocator, db, r);
@@ -54,16 +48,14 @@ pub fn getUserIdOrNull(allocator: Allocator, db: *Db, r: zap.Request) !?i64 {
         allocator,
         session_cookie_name,
     ) orelse return null;
-    const user_id: ?i64 = user_session_service.findUserId(
+
+    const user_id = try user_session_service.findUserId(
         allocator,
         db,
         token,
-    ) catch |err| switch (err) {
-        error.InvalidSessionToken => blk: {
-            try clearSessionToken(r);
-            break :blk null;
-        },
-        else => return err,
+    ) orelse {
+        try clearSessionToken(r);
+        return null;
     };
 
     return user_id;
@@ -75,16 +67,13 @@ pub fn requireAdmin(allocator: Allocator, db: *Db, r: zap.Request) !i64 {
         session_cookie_name,
     )) orelse return APIError.APIUnauthenticated;
 
-    const user_id = user_session_service.findUserId(
+    const user_id = (try user_session_service.findUserId(
         allocator,
         db,
         token,
-    ) catch |err| switch (err) {
-        error.InvalidSessionToken => {
-            try clearSessionToken(r);
-            return APIError.APIUnauthenticated;
-        },
-        else => return err,
+    )) orelse {
+        try clearSessionToken(r);
+        return APIError.APIUnauthenticated;
     };
 
     const is_admin = user_service.isAdmin(
@@ -92,7 +81,7 @@ pub fn requireAdmin(allocator: Allocator, db: *Db, r: zap.Request) !i64 {
         db,
         user_id,
     ) catch |err| switch (err) {
-        error.UserNotFound => {
+        user_service.AuthorizationError.UserNotFound => {
             try clearSessionToken(r);
             return APIError.APIUnauthenticated;
         },

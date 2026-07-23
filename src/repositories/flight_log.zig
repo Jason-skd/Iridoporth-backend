@@ -108,7 +108,7 @@ pub fn insert(
         .content = content,
         .creator_user_id = creator_user_id,
         .created_at = created_at,
-    })) orelse return error.InsertDidNotReturnRow;
+    })) orelse return sqlite_adapter.InsertReturningError.InsertDidNotReturnRow;
 
     return .{
         .id = row.id,
@@ -444,7 +444,11 @@ test "respond returns whether an entry exists" {
         "Cleared for landing",
     ));
 
-    const entries = try listAll(arena.allocator(), &db, null);
+    const entries = try listAll(
+        arena.allocator(),
+        &db,
+        null,
+    );
     const responded_entry = entries[1];
     try std.testing.expectEqual(
         flight_log_domain.FlightLogResponseTag.Response,
@@ -575,12 +579,20 @@ test "hide and unhide return whether an entry exists" {
     try seedFlightLogListData(&db);
 
     try std.testing.expect(try hide(std.testing.io, &db, 1));
-    const hidden_entries = try listAll(arena.allocator(), &db, null);
+    const hidden_entries = try listAll(
+        arena.allocator(),
+        &db,
+        null,
+    );
     try std.testing.expectEqual(@as(usize, 1), hidden_entries.len);
     try std.testing.expectEqual(@as(i64, 2), hidden_entries[0].id);
 
     try std.testing.expect(try unhide(&db, 1));
-    const visible_entries = try listAll(arena.allocator(), &db, null);
+    const visible_entries = try listAll(
+        arena.allocator(),
+        &db,
+        null,
+    );
     try std.testing.expectEqual(@as(usize, 2), visible_entries.len);
 
     try std.testing.expect(!try hide(std.testing.io, &db, 99));

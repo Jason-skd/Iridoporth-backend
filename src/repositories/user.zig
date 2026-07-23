@@ -4,6 +4,8 @@ const Allocator = std.mem.Allocator;
 const sqlite = @import("sqlite");
 const Db = sqlite.Db;
 
+const sqlite_adapter = @import("../db/sqlite.zig");
+
 const user_domain = @import("../domain/user.zig");
 const User = user_domain.User;
 const UserDraft = user_domain.UserDraft;
@@ -88,7 +90,7 @@ pub fn findUserByEmail(allocator: Allocator, db: *Db, email: []const u8) !?User 
     return findUser(allocator, db, query, .{ .email = email });
 }
 
-pub fn setPasswordHash(io: std.Io, db: *Db, user_id: i64, password_hash: []const u8) !void {
+pub fn setPasswordHash(io: std.Io, db: *Db, user_id: i64, password_hash: []const u8) !bool {
     const now = std.Io.Timestamp.now(io, .real);
     const changed_at = now.toSeconds();
 
@@ -113,9 +115,7 @@ pub fn setPasswordHash(io: std.Io, db: *Db, user_id: i64, password_hash: []const
         .user_id = user_id,
     });
 
-    if (db.rowsAffected() == 0) {
-        return error.UserNotFoundOrNotAccount;
-    }
+    return db.rowsAffected() != 0;
 }
 
 pub fn findPasswordHashByUserId(db: *Db, allocator: Allocator, user_id: i64) !?[]const u8 {
@@ -180,7 +180,7 @@ fn insertUser(allocator: Allocator, db: *Db, user_draft: UserDraft) !User {
             .anonymous => null,
             .account => |account| account.name,
         },
-    })) orelse return error.InsertDidNotReturnRow;
+    })) orelse return sqlite_adapter.InsertReturningError.InsertDidNotReturnRow;
 
     return .{
         .id = row.user_id,
