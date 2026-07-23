@@ -40,7 +40,7 @@ pub fn post(
 
     const success = try flight_log_repository.like(
         ctx.io,
-        ctx.allocator,
+        arena,
         &ctx.db,
         params.entry_id,
         viewer_user_id,
@@ -78,7 +78,7 @@ pub fn delete(
     );
 
     const success = try flight_log_repository.unlike(
-        ctx.allocator,
+        arena,
         &ctx.db,
         params.entry_id,
         viewer_user_id,
