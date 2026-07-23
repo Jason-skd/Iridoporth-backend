@@ -35,8 +35,6 @@ pub fn post(
         r,
     );
 
-    r.setHeader("Content-Type", "application/json") catch {};
-
     try flight_log_repository.like(ctx.io, &ctx.db, params.entry_id, viewer_user_id);
 
     const response = FlightLogActionResponse{
@@ -47,6 +45,7 @@ pub fn post(
         FlightLogActionResponse,
         arena,
         r,
+        std.http.Status.ok,
         response,
     );
 }
@@ -66,8 +65,6 @@ pub fn delete(
         r,
     );
 
-    r.setHeader("Content-Type", "application/json") catch {};
-
     try flight_log_repository.unlike(&ctx.db, params.entry_id, viewer_user_id);
 
     const response = FlightLogActionResponse{
@@ -78,6 +75,7 @@ pub fn delete(
         FlightLogActionResponse,
         arena,
         r,
+        std.http.Status.ok,
         response,
     );
 }

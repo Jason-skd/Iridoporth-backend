@@ -21,8 +21,6 @@ pub fn get(
     ctx: *Context,
     r: zap.Request,
 ) !void {
-    r.setHeader("Content-Type", "application/json") catch {};
-
     const response = switch (ctx.raspi) {
         .unavailable => RaspiStatusResponse{
             .data = .{
@@ -47,6 +45,7 @@ pub fn get(
         RaspiStatusResponse,
         arena,
         r,
+        std.http.Status.ok,
         response,
     );
 }

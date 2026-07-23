@@ -34,7 +34,9 @@ pub fn main(init: std.process.Init) !void {
 
     try startDetachedStatusSampler(&app_context);
 
-    try App.init(gpa_allocator, &app_context, .{});
+    try App.init(gpa_allocator, &app_context, .{
+        .default_error_strategy = .raise,
+    });
     defer App.deinit();
 
     var endpoints = Endpoints{};

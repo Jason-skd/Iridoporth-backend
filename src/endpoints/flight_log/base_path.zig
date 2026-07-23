@@ -33,8 +33,6 @@ pub fn get(
         r,
     );
 
-    r.setHeader("Content-Type", "application/json") catch {};
-
     const entries = try flight_log_service.listAll(
         arena,
         &ctx.db,
@@ -52,6 +50,7 @@ pub fn get(
         FlightLogListResponse,
         arena,
         r,
+        std.http.Status.ok,
         response,
     );
 }
@@ -69,8 +68,6 @@ pub fn post(
         &ctx.db,
         r,
     );
-
-    r.setHeader("Content-Type", "application/json") catch {};
 
     const request_body = r.body orelse return error.InvalidRequest;
     const parsed = try std.json.parseFromSlice(
@@ -100,6 +97,7 @@ pub fn post(
         FlightLogPostResponse,
         arena,
         r,
+        std.http.Status.ok,
         response,
     );
 }

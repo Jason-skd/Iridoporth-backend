@@ -44,8 +44,8 @@ allocator: Allocator,
 raspi: Raspi,
 db: Db,
 
-pub fn unhandledRequest(_: *Context, _: Allocator, r: zap.Request) !void {
-    response_http.sendStaticJson(r, .not_found, "{\"ok\": false}");
+pub fn unhandledRequest(_: *Context, _: Allocator, r: zap.Request) anyerror!void {
+    try response_http.sendPublicError(r, api_error.not_found);
 }
 
 pub fn unhandledError(_: *Context, r: zap.Request, err: anyerror) void {
@@ -59,11 +59,18 @@ pub fn unhandledError(_: *Context, r: zap.Request, err: anyerror) void {
     );
 
     if (api_error.classify(err)) |public_error| {
-        response_http.sendPublicError(r, public_error);
+        response_http.sendPublicError(r, public_error) catch |send_err| {
+            std.debug.print(
+                "Failed to send public error response: {}\n",
+                .{send_err},
+            );
+        };
     } else {
-        response_http.sendPublicError(r, .{
-            .status = .internal_server_error,
-            .code = "internal_error",
-        });
+        response_http.sendPublicError(r, api_error.internal_error) catch |send_err| {
+            std.debug.print(
+                "Failed to send internal error response: {}\n",
+                .{send_err},
+            );
+        };
     }
 }
