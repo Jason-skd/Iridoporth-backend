@@ -106,8 +106,8 @@ pub fn Create(
                     pub fn onRequestInterface(interface: *Interface, r: Request) !void {
                         var self: *Bound = Bound.unwrap(interface);
                         var arena = try get_arena();
+                        defer _ = arena.reset(.{ .retain_with_limit = _static.opts.arena_retain_capacity });
                         try self.onRequest(arena.allocator(), self.app_context, r);
-                        _ = arena.reset(.{ .retain_with_limit = _static.opts.arena_retain_capacity });
                     }
 
                     pub fn onRequest(self: *Bound, arena: Allocator, app_context: *Context, r: Request) !void {
@@ -488,6 +488,7 @@ pub fn Create(
             // this is basically the "not found" handler
             if (_static.unhandled_request) |foo| {
                 var arena = try get_arena();
+                defer _ = arena.reset(.{ .retain_with_limit = _static.opts.arena_retain_capacity });
                 foo(_static.context, arena.allocator(), r) catch |err| {
                     switch (_static.opts.default_error_strategy) {
                         .raise => if (_static.unhandled_error) |error_cb| {
