@@ -5,6 +5,9 @@ const zap = @import("zap");
 
 const Context = @import("../../context.zig");
 
+const api_error = @import("../../http/api_error.zig");
+const APIError = api_error.Error;
+
 const request_user_http = @import("../../http/request_user.zig");
 
 const response_http = @import("../../http/response.zig");
@@ -69,7 +72,7 @@ pub fn post(
         r,
     );
 
-    const request_body = r.body orelse return error.InvalidRequest;
+    const request_body = r.body orelse return APIError.APIInvalidRequest;
     const parsed = try std.json.parseFromSlice(
         FlightLogPostRequest,
         arena,

@@ -7,10 +7,10 @@ const Context = @import("../../context.zig");
 
 const flight_log_repository = @import("../../repositories/flight_log.zig");
 
-const request_user_http = @import("../../http/request_user.zig");
-
 const api_error = @import("../../http/api_error.zig");
 const APIError = api_error.Error;
+
+const request_user_http = @import("../../http/request_user.zig");
 
 const response_http = @import("../../http/response.zig");
 
@@ -33,7 +33,7 @@ pub fn patch(
 ) !void {
     r.parseCookies(false);
 
-    const request_body = r.body orelse return error.InvalidRequest;
+    const request_body = r.body orelse return APIError.APIInvalidRequest;
     const parsed = try std.json.parseFromSlice(
         FlightLogPatchRequest,
         arena,
@@ -59,7 +59,7 @@ pub fn patch(
             if (!success) {
                 return APIError.APIFlightLogNotFound;
             }
-        } else return error.InvalidRequest;
+        } else return APIError.APIInvalidRequest;
     } else if (parsed.value.is_hidden) |is_hidden| {
         _ = try request_user_http.requireAdmin(arena, &ctx.db, r);
 

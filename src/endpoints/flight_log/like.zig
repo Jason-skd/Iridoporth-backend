@@ -7,10 +7,10 @@ const Context = @import("../../context.zig");
 
 const flight_log_repository = @import("../../repositories/flight_log.zig");
 
-const request_user_http = @import("../../http/request_user.zig");
-
 const api_error = @import("../../http/api_error.zig");
 const APIError = api_error.Error;
+
+const request_user_http = @import("../../http/request_user.zig");
 
 const response_http = @import("../../http/response.zig");
 

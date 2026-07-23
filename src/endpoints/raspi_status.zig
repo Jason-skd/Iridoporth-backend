@@ -8,6 +8,7 @@ const Context = @import("../context.zig");
 const response_http = @import("../http/response.zig");
 
 const raspi_status_api = @import("../api/raspi_status.zig");
+
 const RaspiStatusResponse = raspi_status_api.RaspiStatusResponse;
 
 pub const RaspiStatusEndpoint = @This();
