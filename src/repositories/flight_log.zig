@@ -121,7 +121,7 @@ pub fn respond(
     db: *Db,
     entry_id: i64,
     response_content: []const u8,
-) !void {
+) !bool {
     const now = std.Io.Timestamp.now(io, .real);
     const responded_at = now.toSeconds();
 
@@ -140,12 +140,10 @@ pub fn respond(
         .entry_id = entry_id,
     });
 
-    if (db.rowsAffected() == 0) {
-        return error.EntryNotFound;
-    }
+    return db.rowsAffected() != 0;
 }
 
-pub fn delete(io: std.Io, db: *Db, entry_id: i64, action_user_id: i64) !void {
+pub fn delete(io: std.Io, db: *Db, entry_id: i64, action_user_id: i64) !bool {
     const now = std.Io.Timestamp.now(io, .real);
     const deleted_at = now.toSeconds();
 
@@ -164,12 +162,10 @@ pub fn delete(io: std.Io, db: *Db, entry_id: i64, action_user_id: i64) !void {
         .viewer_user_id = action_user_id,
     });
 
-    if (db.rowsAffected() == 0) {
-        return error.EntryNotFoundOrNotOwnedByUser;
-    }
+    return db.rowsAffected() != 0;
 }
 
-pub fn hide(io: std.Io, db: *Db, entry_id: i64) !void {
+pub fn hide(io: std.Io, db: *Db, entry_id: i64) !bool {
     const now = std.Io.Timestamp.now(io, .real);
     const hidden_at = now.toSeconds();
 
@@ -187,12 +183,10 @@ pub fn hide(io: std.Io, db: *Db, entry_id: i64) !void {
         .entry_id = entry_id,
     });
 
-    if (db.rowsAffected() == 0) {
-        return error.EntryNotFound;
-    }
+    return db.rowsAffected() != 0;
 }
 
-pub fn unhide(db: *Db, entry_id: i64) !void {
+pub fn unhide(db: *Db, entry_id: i64) !bool {
     const query = (
         \\UPDATE flight_log_entries
         \\SET hidden_at = NULL
@@ -206,18 +200,27 @@ pub fn unhide(db: *Db, entry_id: i64) !void {
         .entry_id = entry_id,
     });
 
-    if (db.rowsAffected() == 0) {
-        return error.EntryNotFound;
-    }
+    return db.rowsAffected() != 0;
 }
 
-pub fn like(io: std.Io, db: *Db, entry_id: i64, viewer_user_id: i64) !void {
+pub fn like(
+    io: std.Io,
+    allocator: Allocator,
+    db: *Db,
+    entry_id: i64,
+    viewer_user_id: i64,
+) !bool {
     const now = std.Io.Timestamp.now(io, .real);
     const created_at = now.toSeconds();
 
+    // use INSERT ... SELECT ... FROM not INSERT ... VALUES to avoid SQL error
     const query = (
         \\INSERT INTO flight_log_entry_likes(entry_id, user_id, created_at)
-        \\VALUES (:entry_id{i64}, :viewer_user_id{i64}, :created_at{i64})
+        \\SELECT entry_id, :viewer_user_id{i64}, :created_at{i64}
+        \\FROM flight_log_entries
+        \\WHERE entry_id = :entry_id{i64}
+        \\  AND deleted_at IS NULL
+        \\  AND hidden_at IS NULL
         \\ON CONFLICT(entry_id, user_id) DO NOTHING
     );
 
@@ -230,12 +233,33 @@ pub fn like(io: std.Io, db: *Db, entry_id: i64, viewer_user_id: i64) !void {
         .created_at = created_at,
     });
 
-    if (db.rowsAffected() == 0) {
-        return error.EntryNotFoundOrAlreadyLiked;
+    if (db.rowsAffected() != 0) {
+        return true;
     }
+
+    const check_query = (
+        \\SELECT 1 AS entry_exists
+        \\FROM flight_log_entries
+        \\WHERE entry_id = :entry_id{i64}
+        \\  AND deleted_at IS NULL
+        \\  AND hidden_at IS NULL
+    );
+
+    var check_stmt = try db.prepare(check_query);
+    defer check_stmt.deinit();
+
+    const Row = struct { entry_exists: bool }; // no use, but corresponds to the query result, adapter requires
+    return (try check_stmt.oneAlloc(Row, allocator, .{}, .{
+        .entry_id = entry_id,
+    })) != null;
 }
 
-pub fn unlike(db: *Db, entry_id: i64, viewer_user_id: i64) !void {
+pub fn unlike(
+    allocator: Allocator,
+    db: *Db,
+    entry_id: i64,
+    viewer_user_id: i64,
+) !bool {
     const query = (
         \\DELETE FROM flight_log_entry_likes
         \\WHERE entry_id = :entry_id{i64} AND user_id = :viewer_user_id{i64}
@@ -249,9 +273,25 @@ pub fn unlike(db: *Db, entry_id: i64, viewer_user_id: i64) !void {
         .viewer_user_id = viewer_user_id,
     });
 
-    if (db.rowsAffected() == 0) {
-        return error.EntryNotFoundOrNotLiked;
+    if (db.rowsAffected() != 0) {
+        return true;
     }
+
+    const check_query = (
+        \\SELECT 1 AS entry_exists
+        \\FROM flight_log_entries
+        \\WHERE entry_id = :entry_id{i64}
+        \\  AND deleted_at IS NULL
+        \\  AND hidden_at IS NULL
+    );
+
+    var check_stmt = try db.prepare(check_query);
+    defer check_stmt.deinit();
+
+    const Row = struct { entry_exists: bool };
+    return (try check_stmt.oneAlloc(Row, allocator, .{}, .{
+        .entry_id = entry_id,
+    })) != null;
 }
 
 fn seedFlightLogListData(db: *Db) !void {
@@ -388,6 +428,41 @@ test "insert create entry and could be retrieved by listAll" {
     try std.testing.expectEqualStrings("Maverick", new_entry.callsign);
 }
 
+test "respond returns whether an entry exists" {
+    var arena = std.heap.ArenaAllocator.init(std.testing.allocator);
+    defer arena.deinit();
+
+    var db = try sqlite_adapter.openMigratedTestDb();
+    defer db.deinit();
+
+    try seedFlightLogListData(&db);
+
+    try std.testing.expect(try respond(
+        std.testing.io,
+        &db,
+        1,
+        "Cleared for landing",
+    ));
+
+    const entries = try listAll(arena.allocator(), &db, null);
+    const responded_entry = entries[1];
+    try std.testing.expectEqual(
+        flight_log_domain.FlightLogResponseTag.Response,
+        std.meta.activeTag(responded_entry.response),
+    );
+    try std.testing.expectEqualStrings(
+        "Cleared for landing",
+        responded_entry.response.Response.content,
+    );
+
+    try std.testing.expect(!try respond(
+        std.testing.io,
+        &db,
+        99,
+        "No entry",
+    ));
+}
+
 test "delete removes entry and guest can't remove owner's entry" {
     var arena = std.heap.ArenaAllocator.init(std.testing.allocator);
     defer arena.deinit();
@@ -397,7 +472,12 @@ test "delete removes entry and guest can't remove owner's entry" {
 
     try seedFlightLogListData(&db);
 
-    try delete(std.testing.io, &db, 1, 1);
+    try std.testing.expect(try delete(
+        std.testing.io,
+        &db,
+        1,
+        1,
+    ));
     const entries = try listAll(
         arena.allocator(),
         &db,
@@ -406,13 +486,15 @@ test "delete removes entry and guest can't remove owner's entry" {
     try std.testing.expectEqual(@as(usize, 1), entries.len);
     try std.testing.expectEqual(@as(i64, 2), entries[0].id);
 
-    try std.testing.expectError(
-        error.EntryNotFoundOrNotOwnedByUser,
-        delete(std.testing.io, &db, 2, 1),
-    );
+    try std.testing.expect(!try delete(
+        std.testing.io,
+        &db,
+        2,
+        1,
+    ));
 }
 
-test "like increments likes and sets liked_by_this_user while unlike decreases" {
+test "like and unlike are idempotent for visible entries" {
     var arena = std.heap.ArenaAllocator.init(std.testing.allocator);
     defer arena.deinit();
 
@@ -421,7 +503,20 @@ test "like increments likes and sets liked_by_this_user while unlike decreases" 
 
     try seedFlightLogListData(&db);
 
-    try like(std.testing.io, &db, 2, 1);
+    try std.testing.expect(try like(
+        std.testing.io,
+        arena.allocator(),
+        &db,
+        2,
+        1,
+    ));
+    try std.testing.expect(try like(
+        std.testing.io,
+        arena.allocator(),
+        &db,
+        2,
+        1,
+    ));
 
     const entries = try listAll(
         arena.allocator(),
@@ -433,12 +528,18 @@ test "like increments likes and sets liked_by_this_user while unlike decreases" 
     try std.testing.expectEqual(@as(i64, 1), liked_entry.likes);
     try std.testing.expect(liked_entry.liked_by_this_user);
 
-    try std.testing.expectError(
-        error.EntryNotFoundOrAlreadyLiked,
-        like(std.testing.io, &db, 2, 1),
-    );
-
-    try unlike(&db, 2, 1);
+    try std.testing.expect(try unlike(
+        arena.allocator(),
+        &db,
+        2,
+        1,
+    ));
+    try std.testing.expect(try unlike(
+        arena.allocator(),
+        &db,
+        2,
+        1,
+    ));
 
     const unliked_entries = try listAll(
         arena.allocator(),
@@ -449,8 +550,39 @@ test "like increments likes and sets liked_by_this_user while unlike decreases" 
     try std.testing.expectEqual(@as(i64, 0), unliked_entry.likes);
     try std.testing.expect(!unliked_entry.liked_by_this_user);
 
-    try std.testing.expectError(
-        error.EntryNotFoundOrNotLiked,
-        unlike(&db, 2, 1),
-    );
+    try std.testing.expect(!try like(
+        std.testing.io,
+        arena.allocator(),
+        &db,
+        99,
+        1,
+    ));
+    try std.testing.expect(!try unlike(
+        arena.allocator(),
+        &db,
+        99,
+        1,
+    ));
+}
+
+test "hide and unhide return whether an entry exists" {
+    var arena = std.heap.ArenaAllocator.init(std.testing.allocator);
+    defer arena.deinit();
+
+    var db = try sqlite_adapter.openMigratedTestDb();
+    defer db.deinit();
+
+    try seedFlightLogListData(&db);
+
+    try std.testing.expect(try hide(std.testing.io, &db, 1));
+    const hidden_entries = try listAll(arena.allocator(), &db, null);
+    try std.testing.expectEqual(@as(usize, 1), hidden_entries.len);
+    try std.testing.expectEqual(@as(i64, 2), hidden_entries[0].id);
+
+    try std.testing.expect(try unhide(&db, 1));
+    const visible_entries = try listAll(arena.allocator(), &db, null);
+    try std.testing.expectEqual(@as(usize, 2), visible_entries.len);
+
+    try std.testing.expect(!try hide(std.testing.io, &db, 99));
+    try std.testing.expect(!try unhide(&db, 99));
 }

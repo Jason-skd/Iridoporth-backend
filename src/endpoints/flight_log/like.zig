@@ -9,6 +9,9 @@ const flight_log_repository = @import("../../repositories/flight_log.zig");
 
 const request_user_http = @import("../../http/request_user.zig");
 
+const api_error = @import("../../http/api_error.zig");
+const APIError = api_error.Error;
+
 const response_http = @import("../../http/response.zig");
 
 const flight_log_api = @import("../../api/flight_log.zig");
@@ -35,7 +38,16 @@ pub fn post(
         r,
     );
 
-    try flight_log_repository.like(ctx.io, &ctx.db, params.entry_id, viewer_user_id);
+    const success = try flight_log_repository.like(
+        ctx.io,
+        ctx.allocator,
+        &ctx.db,
+        params.entry_id,
+        viewer_user_id,
+    );
+    if (!success) {
+        return APIError.ApiFlightLogNotFound;
+    }
 
     const response = FlightLogActionResponse{
         .data = .{},
@@ -65,7 +77,15 @@ pub fn delete(
         r,
     );
 
-    try flight_log_repository.unlike(&ctx.db, params.entry_id, viewer_user_id);
+    const success = try flight_log_repository.unlike(
+        ctx.allocator,
+        &ctx.db,
+        params.entry_id,
+        viewer_user_id,
+    );
+    if (!success) {
+        return APIError.ApiFlightLogNotFound;
+    }
 
     const response = FlightLogActionResponse{
         .data = .{},
