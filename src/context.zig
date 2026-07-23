@@ -14,6 +14,10 @@ const raspi_status_service = @import("services/raspi_status.zig");
 
 const sqlite_adapter = @import("db/sqlite.zig");
 
+const api_error = @import("http/api_error.zig");
+
+const response_http = @import("http/response.zig");
+
 pub const Context = @This();
 
 pub fn init(io: std.Io, allocator: Allocator, db_path: [:0]const u8) !Context {
@@ -40,13 +44,26 @@ allocator: Allocator,
 raspi: Raspi,
 db: Db,
 
-pub fn unhandledRequest(_: *Context, _: Allocator, r: zap.Request) anyerror!void {
-    r.setStatus(.not_found);
-    try r.sendBody("Not Found");
+pub fn unhandledRequest(_: *Context, _: Allocator, r: zap.Request) !void {
+    response_http.sendStaticJson(r, .not_found, "{\"ok\": false}");
 }
 
 pub fn unhandledError(_: *Context, r: zap.Request, err: anyerror) void {
-    std.debug.print("Unhandled error: {}\n", .{err});
-    r.setStatus(.internal_server_error);
-    r.sendBody("Internal Server Error") catch {};
+    std.debug.print(
+        "Unhandled HTTP error: method={s} path={s} error={}\n",
+        .{
+            r.method orelse "<unknown>",
+            r.path orelse "<unknown>",
+            err,
+        },
+    );
+
+    if (api_error.classify(err)) |public_error| {
+        response_http.sendPublicError(r, public_error);
+    } else {
+        response_http.sendPublicError(r, .{
+            .status = .internal_server_error,
+            .code = "internal_error",
+        });
+    }
 }

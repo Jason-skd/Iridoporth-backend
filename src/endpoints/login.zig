@@ -18,7 +18,7 @@ const LoginResponse = login_api.LoginResponse;
 pub const LoginEndpoint = @This();
 
 path: []const u8 = "/login",
-error_strategy: zap.Endpoint.ErrorStrategy = .log_to_console,
+error_strategy: zap.Endpoint.ErrorStrategy = .raise,
 
 pub fn post(
     _: *LoginEndpoint,

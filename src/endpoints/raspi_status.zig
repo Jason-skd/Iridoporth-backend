@@ -13,7 +13,7 @@ const RaspiStatusResponse = raspi_status_api.RaspiStatusResponse;
 pub const RaspiStatusEndpoint = @This();
 
 path: []const u8 = "/api/v1/raspi/status",
-error_strategy: zap.Endpoint.ErrorStrategy = .log_to_console,
+error_strategy: zap.Endpoint.ErrorStrategy = .raise,
 
 pub fn get(
     _: *RaspiStatusEndpoint,
