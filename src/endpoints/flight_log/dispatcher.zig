@@ -14,7 +14,7 @@ const entry_like_endpoint = @import("like.zig");
 const FlightLogEndpoint = @This();
 
 path: []const u8 = "/api/v1/flight-log",
-error_strategy: zap.Endpoint.ErrorStrategy = .log_to_console,
+error_strategy: zap.Endpoint.ErrorStrategy = .raise,
 
 // GET /api/v1/flight-log => list visible flight log entries
 // POST /api/v1/flight-log => create a new flight log entry
