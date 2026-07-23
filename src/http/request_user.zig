@@ -19,7 +19,7 @@ const api_error = @import("./api_error.zig");
 const APIError = api_error.Error;
 
 const session_cookie_name = "session_token";
-const anonymous_session_max_age_s = 60 * 60 * 24 * 91; // 91 days, a season
+const cookie_session_max_age_s = 60 * 60 * 24 * 91; // 91 days, a season
 const password_session_max_age_s = 60 * 60 * 24; // 1 day
 
 pub fn requireUserIdOrCreateAnonymous(
@@ -118,6 +118,8 @@ pub fn setSessionForAccount(
         allocator,
         db,
         user_id,
+        .password_login,
+        password_session_max_age_s,
     );
     try setSessionToken(
         r,
@@ -160,11 +162,12 @@ fn createAnonymousUserIdAndSetSession(
         io,
         allocator,
         db,
+        cookie_session_max_age_s,
     );
     try setSessionToken(
         r,
         session_context.new_session_token,
-        anonymous_session_max_age_s,
+        cookie_session_max_age_s,
     );
     return session_context.user_id;
 }

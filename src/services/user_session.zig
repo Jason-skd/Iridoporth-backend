@@ -5,6 +5,7 @@ const sqlite = @import("sqlite");
 const Db = sqlite.Db;
 
 const user_session_domain = @import("../domain/user_session.zig");
+const SessionMethod = user_session_domain.Method;
 const SessionTokenRandomHex = user_session_domain.SessionTokenRandomHex;
 
 const user_repository = @import("../repositories/user.zig");
@@ -16,7 +17,12 @@ const SessionContext = struct {
     new_session_token: SessionTokenRandomHex,
 };
 
-pub fn createAnonymousSession(io: std.Io, allocator: Allocator, db: *Db) !SessionContext {
+pub fn createAnonymousSession(
+    io: std.Io,
+    allocator: Allocator,
+    db: *Db,
+    max_age_s: i32,
+) !SessionContext {
     const new_user = try user_repository.createAnonymousUser(
         io,
         allocator,
@@ -29,6 +35,8 @@ pub fn createAnonymousSession(io: std.Io, allocator: Allocator, db: *Db) !Sessio
         allocator,
         db,
         user_id,
+        .anonymous_cookie,
+        max_age_s,
     );
 
     return .{
@@ -42,18 +50,20 @@ pub fn createSession(
     allocator: Allocator,
     db: *Db,
     user_id: i64,
+    method: SessionMethod,
+    max_age_s: i32,
 ) !SessionTokenRandomHex {
     const new_session_token = try user_session_domain.generateSessionToken(io);
     const token_hash = user_session_domain.hashSessionToken(new_session_token[0..]);
 
     const now = std.Io.Timestamp.now(io, .real);
-    const expires_at = now.toSeconds() + (60 * 60 * 24 * 91); // 91 days from now
+    const expires_at = now.toSeconds() + max_age_s;
     _ = try user_session_repository.createSession(
         io,
         db,
         allocator,
         user_id,
-        .anonymous_cookie,
+        method,
         token_hash[0..],
         expires_at,
     );
