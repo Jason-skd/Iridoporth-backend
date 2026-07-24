@@ -83,7 +83,7 @@ pub fn requireAdmin(allocator: Allocator, db: *Db, r: zap.Request) !i64 {
     ) catch |err| switch (err) {
         user_service.AuthorizationError.UserNotFound => {
             try clearSessionToken(r);
-            return APIError.APIUnauthenticated;
+            return APIError.APIUserNotFound;
         },
         else => return err,
     };

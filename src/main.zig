@@ -7,6 +7,7 @@ const zap = @import("zap");
 const RaspiStatusEndpoint = @import("endpoints/raspi_status.zig");
 const FlightLogEndpoint = @import("endpoints/flight_log/dispatcher.zig");
 const LoginEndpoint = @import("endpoints/login.zig");
+const AccountEndpoint = @import("endpoints/account.zig");
 
 const raspi_status_service = @import("services/raspi_status.zig");
 
@@ -88,10 +89,12 @@ const Endpoints = struct {
     raspi_status: RaspiStatusEndpoint = .{},
     flight_log: FlightLogEndpoint = .{},
     login: LoginEndpoint = .{},
+    account: AccountEndpoint = .{},
     fn register(self: *Endpoints) !void {
         try App.register(&self.raspi_status);
         try App.register(&self.flight_log);
         try App.register(&self.login);
+        try App.register(&self.account);
     }
 };
 
