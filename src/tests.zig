@@ -6,4 +6,8 @@ test {
     _ = @import("services/raspi_status.zig");
 
     _ = @import("endpoints/flight_log/dispatcher.zig");
+
+    _ = @import("domain/validation.zig");
+
+    _ = @import("services/user.zig");
 }

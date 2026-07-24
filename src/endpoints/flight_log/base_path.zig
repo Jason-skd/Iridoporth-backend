@@ -21,6 +21,8 @@ const FlightLogListResponse = flight_log_api.FlightLogListResponse;
 const FlightLogPostRequest = flight_log_api.FlightLogPostRequest;
 const FlightLogPostResponse = flight_log_api.FlightLogPostResponse;
 
+const validation_domain = @import("../../domain/validation.zig");
+
 const FlightLogEndpoint = @import("dispatcher.zig");
 
 pub fn get(
@@ -83,11 +85,16 @@ pub fn post(
         r,
     );
 
+    const content = switch (validation_domain.sanitizeContent(parsed.value.content)) {
+        .ok => |trimmed| trimmed,
+        else => return APIError.APIInvalidRequest,
+    };
+
     const result = try flight_log_repository.insert(
         ctx.io,
         arena,
         &ctx.db,
-        parsed.value.content,
+        content,
         creator_user_id,
     );
 
