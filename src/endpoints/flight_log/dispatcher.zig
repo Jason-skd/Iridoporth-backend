@@ -10,6 +10,8 @@ const APIError = api_error.Error;
 
 const base_path_endpoint = @import("base_path.zig");
 
+const admin_endpoint = @import("admin.zig");
+
 const entry_endpoint = @import("entry.zig");
 
 const entry_like_endpoint = @import("like.zig");
@@ -30,6 +32,7 @@ error_strategy: zap.Endpoint.ErrorStrategy = .raise,
 
 const Route = union(enum) {
     base: void,
+    admin: void,
     entry: entry_endpoint.Params,
     entry_like: entry_like_endpoint.Params,
 };
@@ -72,6 +75,10 @@ fn parseRoute(self: *FlightLogEndpoint, path: ?[]const u8) RouteParseResult {
         return .not_found;
     }
 
+    if (std.mem.eql(u8, first, "admin")) {
+        return if (iterator.peek() == null) .{ .matched = .admin } else .not_found;
+    }
+
     const entry_id = std.fmt.parseInt(i64, first, 10) catch {
         return .invalid_entry_id;
     };
@@ -95,6 +102,7 @@ pub fn get(
     const route = try parseRoute(self, r.path).strip();
     return switch (route) {
         .base => base_path_endpoint.get(self, arena, ctx, r),
+        .admin => admin_endpoint.get(self, arena, ctx, r),
         else => APIError.APINotFound,
     };
 }
@@ -185,6 +193,14 @@ test "parseRoute split the path and dispatch" {
     }, .{
         .name = "missing path",
         .path = null,
+        .expected = .not_found,
+    }, .{
+        .name = "admin path",
+        .path = "/api/v1/flight-log/admin",
+        .expected = .{ .matched = .admin },
+    }, .{
+        .name = "admin path with extra segment is not_found",
+        .path = "/api/v1/flight-log/admin/extra",
         .expected = .not_found,
     }, .{
         .name = "invalid id",
