@@ -28,10 +28,19 @@ const PatchAction = enum {
     delete,
     hide,
     unhide,
+    respond,
+    clear_response,
 };
 
 fn parseAction(request: FlightLogPatchRequest) APIError!PatchAction {
-    if (request.is_deleted != null and request.is_hidden != null) {
+    var active_count: u2 = 0;
+
+    if (request.is_deleted != null) active_count += 1;
+    if (request.is_hidden != null) active_count += 1;
+    if (request.response != null) active_count += 1;
+    if (request.clear_response == true) active_count += 1;
+
+    if (active_count != 1) {
         return APIError.APIInvalidRequest;
     }
 
@@ -44,6 +53,14 @@ fn parseAction(request: FlightLogPatchRequest) APIError!PatchAction {
 
     if (request.is_hidden) |is_hidden| {
         return if (is_hidden) .hide else .unhide;
+    }
+
+    if (request.response != null) {
+        return .respond;
+    }
+
+    if (request.clear_response == true) {
+        return .clear_response;
     }
 
     return APIError.APIInvalidRequest;
@@ -111,6 +128,41 @@ pub fn patch(
                 params.entry_id,
             );
         },
+        .respond => {
+            _ = try request_user_http.requireAdmin(
+                arena,
+                &ctx.db,
+                r,
+            );
+
+            const content = std.mem.trim(
+                u8,
+                parsed.value.response.?,
+                " \t\r\n",
+            );
+            if (content.len == 0) {
+                return APIError.APIInvalidRequest;
+            }
+
+            success = try flight_log_repository.respond(
+                ctx.io,
+                &ctx.db,
+                params.entry_id,
+                content,
+            );
+        },
+        .clear_response => {
+            _ = try request_user_http.requireAdmin(
+                arena,
+                &ctx.db,
+                r,
+            );
+
+            success = try flight_log_repository.clearResponse(
+                &ctx.db,
+                params.entry_id,
+            );
+        },
     }
     if (!success) {
         return APIError.APIFlightLogNotFound;
@@ -126,5 +178,79 @@ pub fn patch(
         r,
         std.http.Status.ok,
         response,
+    );
+}
+
+test "parseAction recognizes each single action" {
+    try std.testing.expectEqual(
+        PatchAction.respond,
+        try parseAction(.{ .is_deleted = null, .is_hidden = null, .response = "x", .clear_response = null }),
+    );
+    try std.testing.expectEqual(
+        PatchAction.clear_response,
+        try parseAction(.{ .is_deleted = null, .is_hidden = null, .response = null, .clear_response = true }),
+    );
+    try std.testing.expectEqual(
+        PatchAction.delete,
+        try parseAction(.{ .is_deleted = true, .is_hidden = null, .response = null, .clear_response = null }),
+    );
+    try std.testing.expectEqual(
+        PatchAction.hide,
+        try parseAction(.{ .is_deleted = null, .is_hidden = true, .response = null, .clear_response = null }),
+    );
+    try std.testing.expectEqual(
+        PatchAction.unhide,
+        try parseAction(.{ .is_deleted = null, .is_hidden = false, .response = null, .clear_response = null }),
+    );
+}
+
+test "parseAction rejects zero or multiple action fields" {
+    const empty: FlightLogPatchRequest = .{
+        .is_deleted = null,
+        .is_hidden = null,
+        .response = null,
+        .clear_response = null,
+    };
+    try std.testing.expectError(
+        APIError.APIInvalidRequest,
+        parseAction(empty),
+    );
+
+    try std.testing.expectError(
+        APIError.APIInvalidRequest,
+        parseAction(.{ .is_deleted = true, .is_hidden = true, .response = null, .clear_response = null }),
+    );
+
+    try std.testing.expectError(
+        APIError.APIInvalidRequest,
+        parseAction(.{ .is_deleted = null, .is_hidden = null, .response = "x", .clear_response = true }),
+    );
+
+    try std.testing.expectError(
+        APIError.APIInvalidRequest,
+        parseAction(.{ .is_deleted = null, .is_hidden = true, .response = "x", .clear_response = null }),
+    );
+
+    try std.testing.expectError(
+        APIError.APIInvalidRequest,
+        parseAction(.{ .is_deleted = true, .is_hidden = null, .response = "x", .clear_response = null }),
+    );
+}
+
+test "parseAction rejects is_deleted false" {
+    try std.testing.expectError(
+        APIError.APIInvalidRequest,
+        parseAction(.{ .is_deleted = false, .is_hidden = null, .response = null, .clear_response = null }),
+    );
+}
+
+test "parseAction treats clear_response null and false as no action" {
+    try std.testing.expectEqual(
+        PatchAction.respond,
+        try parseAction(.{ .is_deleted = null, .is_hidden = null, .response = "x", .clear_response = null }),
+    );
+    try std.testing.expectEqual(
+        PatchAction.respond,
+        try parseAction(.{ .is_deleted = null, .is_hidden = null, .response = "x", .clear_response = false }),
     );
 }
