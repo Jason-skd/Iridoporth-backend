@@ -24,8 +24,8 @@ error_strategy: zap.Endpoint.ErrorStrategy = .raise,
 // GET /api/v1/flight-log => list visible flight log entries
 // POST /api/v1/flight-log => create a new flight log entry
 
-// PATCH /api/v1/flight-log/{id} => respond/delete/hide/unhide(not implemented yet) a flight log entry
-// by request like .{ .is_hidden = true }
+// PATCH /api/v1/flight-log/{id} => respond/clear_response/delete/hide/unhide a flight log entry
+// by request like .{ .response = "..." } or .{ .clear_response = true } or .{ .is_hidden = true }
 
 // POST /api/v1/flight-log/{id}/like => like a flight log entry
 // DELETE /api/v1/flight-log/{id}/like => unlike a flight log entry

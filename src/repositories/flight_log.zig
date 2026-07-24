@@ -224,6 +224,26 @@ pub fn respond(
     return db.rowsAffected() != 0;
 }
 
+pub fn clearResponse(
+    db: *Db,
+    entry_id: i64,
+) !bool {
+    const query = (
+        \\UPDATE flight_log_entries
+        \\SET response = NULL, responded_at = NULL
+        \\WHERE entry_id = :entry_id{i64}
+    );
+
+    var stmt = try db.prepare(query);
+    defer stmt.deinit();
+
+    try stmt.exec(.{}, .{
+        .entry_id = entry_id,
+    });
+
+    return db.rowsAffected() != 0;
+}
+
 pub fn delete(io: std.Io, db: *Db, entry_id: i64, viewer_user_id: i64) !bool {
     const now = std.Io.Timestamp.now(io, .real);
     const deleted_at = now.toSeconds();
@@ -543,7 +563,7 @@ test "insert create entry and could be retrieved by listAll" {
     try std.testing.expectEqualStrings("Maverick", new_entry.callsign);
 }
 
-test "respond returns whether an entry exists" {
+test "respond returns whether an entry exists and overwrites previous response" {
     var arena = std.heap.ArenaAllocator.init(std.testing.allocator);
     defer arena.deinit();
 
@@ -559,7 +579,7 @@ test "respond returns whether an entry exists" {
         "Cleared for landing",
     ));
 
-    const entries = try listAll(
+    var entries = try listAll(
         arena.allocator(),
         &db,
         null,
@@ -574,12 +594,59 @@ test "respond returns whether an entry exists" {
         responded_entry.response.Response.content,
     );
 
+    try std.testing.expect(try respond(
+        std.testing.io,
+        &db,
+        1,
+        "Roger, runway 09",
+    ));
+
+    entries = try listAll(
+        arena.allocator(),
+        &db,
+        null,
+    );
+    const overwritten_entry = entries[1];
+    try std.testing.expectEqualStrings(
+        "Roger, runway 09",
+        overwritten_entry.response.Response.content,
+    );
+
     try std.testing.expect(!try respond(
         std.testing.io,
         &db,
         99,
         "No entry",
     ));
+}
+
+test "clearResponse returns whether an entry exists and is idempotent" {
+    var arena = std.heap.ArenaAllocator.init(std.testing.allocator);
+    defer arena.deinit();
+
+    var db = try sqlite_adapter.openMigratedTestDb();
+    defer db.deinit();
+
+    try seedFlightLogListData(&db);
+
+    // Entry 2 already has a response in seed data.
+    try std.testing.expect(try clearResponse(&db, 2));
+
+    const entries_after_clear = try listAll(
+        arena.allocator(),
+        &db,
+        null,
+    );
+    const cleared_entry = entries_after_clear[1];
+    try std.testing.expectEqual(
+        flight_log_domain.FlightLogResponseTag.None,
+        std.meta.activeTag(cleared_entry.response),
+    );
+
+    // Clearing an entry that already has no response still succeeds.
+    try std.testing.expect(try clearResponse(&db, 1));
+
+    try std.testing.expect(!try clearResponse(&db, 99));
 }
 
 test "delete removes entry and guest can't remove owner's entry" {
