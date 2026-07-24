@@ -18,6 +18,8 @@ const flight_log_api = @import("../../api/flight_log.zig");
 const FlightLogPatchRequest = flight_log_api.FlightLogPatchRequest;
 const FlightLogActionResponse = flight_log_api.FlightLogActionResponse;
 
+const validation_domain = @import("../../domain/validation.zig");
+
 const FlightLogEndpoint = @import("dispatcher.zig");
 
 pub const Params = struct {
@@ -135,14 +137,12 @@ pub fn patch(
                 r,
             );
 
-            const content = std.mem.trim(
-                u8,
+            const content = switch (validation_domain.sanitizeContent(
                 parsed.value.response.?,
-                " \t\r\n",
-            );
-            if (content.len == 0) {
-                return APIError.APIInvalidRequest;
-            }
+            )) {
+                .ok => |trimmed| trimmed,
+                else => return APIError.APIInvalidRequest,
+            };
 
             success = try flight_log_repository.respond(
                 ctx.io,

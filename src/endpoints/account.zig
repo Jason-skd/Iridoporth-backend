@@ -18,6 +18,8 @@ const account_api = @import("../api/account.zig");
 const ChangePasswordRequest = account_api.ChangePasswordRequest;
 const ChangePasswordResponse = account_api.ChangePasswordResponse;
 
+const validation_domain = @import("../domain/validation.zig");
+
 pub const AccountEndpoint = @This();
 
 path: []const u8 = "/api/v1/account/password",
@@ -46,7 +48,10 @@ pub fn put(
     ) catch {
         return APIError.APIInvalidRequest;
     };
-    if (parsed.value.new_password.len == 0) return APIError.APIInvalidRequest;
+    switch (validation_domain.validatePassword(parsed.value.new_password)) {
+        .ok => {},
+        else => return APIError.APIInvalidRequest,
+    }
 
     user_service.changePassword(
         ctx.io,

@@ -11,9 +11,15 @@ const AccountEndpoint = @import("endpoints/account.zig");
 
 const raspi_status_service = @import("services/raspi_status.zig");
 
+const user_service = @import("services/user.zig");
+
 const Context = @import("context.zig");
 
 const App = zap.App.Create(Context);
+
+const bootstrap_admin_email = "admin@example.com";
+const bootstrap_admin_name = "Admin";
+const bootstrap_admin_password = "Admin0001";
 
 pub fn main(init: std.process.Init) !void {
     var gpa: std.heap.DebugAllocator(.{
@@ -32,6 +38,15 @@ pub fn main(init: std.process.Init) !void {
         config.db_path,
     );
     defer app_context.deinit();
+
+    try user_service.ensureAdminAccount(
+        app_context.io,
+        gpa_allocator,
+        &app_context.db,
+        bootstrap_admin_email,
+        bootstrap_admin_name,
+        bootstrap_admin_password,
+    );
 
     try startDetachedStatusSampler(&app_context);
 
