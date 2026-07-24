@@ -8,6 +8,7 @@ const sqlite_adapter = @import("../db/sqlite.zig");
 
 const flight_log_domain = @import("../domain/flight_log.zig");
 const FlightLogListItem = flight_log_domain.FlightLogListItem;
+const FlightLogAdminListItem = flight_log_domain.FlightLogAdminListItem;
 
 pub fn listAll(allocator: Allocator, db: *Db, viewer_user_id: ?i64) ![]FlightLogListItem {
     const query = (
@@ -78,6 +79,86 @@ pub fn listAll(allocator: Allocator, db: *Db, viewer_user_id: ?i64) ![]FlightLog
             .created_by_this_user = row.created_by_this_user,
             .likes = row.likes,
             .liked_by_this_user = row.liked_by_this_user,
+        };
+    }
+
+    return list;
+}
+
+pub fn listAllForAdmin(allocator: Allocator, db: *Db, viewer_user_id: ?i64) ![]FlightLogAdminListItem {
+    const query = (
+        \\WITH params(viewer_user_id) AS (
+        \\  SELECT :viewer_user_id{?i64}
+        \\)
+        \\SELECT
+        \\  e.entry_id,
+        \\  e.content,
+        \\  e.response,
+        \\  e.responded_at,
+        \\  e.deleted_at,
+        \\  e.hidden_at,
+        \\  CASE
+        \\    WHEN u.kind = 'anonymous' THEN 'Anonymous'
+        \\    ELSE u.name
+        \\  END AS callsign,
+        \\  e.created_at,
+        \\  CASE
+        \\    WHEN p.viewer_user_id IS NOT NULL AND e.creator_user_id = p.viewer_user_id THEN 1
+        \\    ELSE 0
+        \\  END AS created_by_this_user,
+        \\  COUNT(l.user_id) AS likes,
+        \\  CASE
+        \\    WHEN p.viewer_user_id IS NULL THEN 0
+        \\    WHEN EXISTS (
+        \\      SELECT 1
+        \\      FROM flight_log_entry_likes mine
+        \\      WHERE mine.entry_id = e.entry_id AND mine.user_id = p.viewer_user_id
+        \\    ) THEN 1
+        \\    ELSE 0
+        \\  END AS liked_by_this_user
+        \\FROM flight_log_entries e
+        \\CROSS JOIN params p
+        \\JOIN users u ON u.user_id = e.creator_user_id
+        \\LEFT JOIN flight_log_entry_likes l ON l.entry_id = e.entry_id
+        \\GROUP BY e.entry_id
+        \\ORDER BY e.entry_id DESC
+    );
+    var stmt = try db.prepare(query);
+    defer stmt.deinit();
+
+    const Row = struct {
+        entry_id: i64,
+        content: []const u8,
+        response: ?[]const u8,
+        responded_at: ?i64,
+        deleted_at: ?i64,
+        hidden_at: ?i64,
+        callsign: []const u8,
+        created_at: i64,
+        created_by_this_user: bool,
+        likes: i64,
+        liked_by_this_user: bool,
+    };
+    const rows: []Row = try stmt.all(Row, allocator, .{}, .{
+        .viewer_user_id = viewer_user_id,
+    });
+
+    const list = try allocator.alloc(FlightLogAdminListItem, rows.len);
+    for (0.., rows) |i, row| {
+        list[i] = FlightLogAdminListItem{
+            .id = row.entry_id,
+            .content = row.content,
+            .response = flight_log_domain.FlightLogResponse.fromDb(
+                row.response,
+                row.responded_at,
+            ),
+            .callsign = row.callsign,
+            .created_at = row.created_at,
+            .created_by_this_user = row.created_by_this_user,
+            .likes = row.likes,
+            .liked_by_this_user = row.liked_by_this_user,
+            .deleted_at = row.deleted_at,
+            .hidden_at = row.hidden_at,
         };
     }
 
@@ -373,6 +454,40 @@ test "listAll returns visible entries with viewer state" {
         flight_log_domain.FlightLogResponseTag.None,
         std.meta.activeTag(second_entry.response),
     );
+}
+
+test "listAllForAdmin returns all entries including hidden and deleted" {
+    var arena = std.heap.ArenaAllocator.init(std.testing.allocator);
+    defer arena.deinit();
+
+    var db = try sqlite_adapter.openMigratedTestDb();
+    defer db.deinit();
+
+    try seedFlightLogListData(&db);
+
+    const entries = try listAllForAdmin(
+        arena.allocator(),
+        &db,
+        2,
+    );
+
+    try std.testing.expectEqual(@as(usize, 4), entries.len);
+
+    // entries[0] == id 4 (hidden)
+    try std.testing.expectEqual(@as(i64, 4), entries[0].id);
+    try std.testing.expectEqual(@as(?i64, 401), entries[0].hidden_at);
+    try std.testing.expectEqual(@as(?i64, null), entries[0].deleted_at);
+
+    // entries[1] == id 3 (deleted)
+    try std.testing.expectEqual(@as(i64, 3), entries[1].id);
+    try std.testing.expectEqual(@as(?i64, 301), entries[1].deleted_at);
+    try std.testing.expectEqual(@as(?i64, null), entries[1].hidden_at);
+
+    // visible entries carry null state
+    try std.testing.expectEqual(@as(?i64, null), entries[2].deleted_at);
+    try std.testing.expectEqual(@as(?i64, null), entries[2].hidden_at);
+    try std.testing.expectEqual(@as(?i64, null), entries[3].deleted_at);
+    try std.testing.expectEqual(@as(?i64, null), entries[3].hidden_at);
 }
 
 test "insert create entry and could be retrieved by listAll" {

@@ -20,6 +20,19 @@ pub const FlightLogListItem = struct {
     liked_by_this_user: bool,
 };
 
+pub const FlightLogAdminListItem = struct {
+    id: i64,
+    content: []const u8,
+    response: FlightLogResponse,
+    callsign: []const u8,
+    created_at: i64,
+    created_by_this_user: bool,
+    likes: i64,
+    liked_by_this_user: bool,
+    deleted_at: ?i64,
+    hidden_at: ?i64,
+};
+
 pub const FlightLogResponseTag = enum {
     None,
     Response,
