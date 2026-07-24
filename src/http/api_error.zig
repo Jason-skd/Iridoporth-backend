@@ -5,6 +5,7 @@ pub const Error = error{
     APINotFound,
     APIUnauthenticated,
     APIForbidden,
+    APIUserNotFound,
     APIInvalidFlightLogEntryId,
     APIFlightLogNotFound,
 };
@@ -28,6 +29,11 @@ pub fn classify(err: anyerror) ?PublicError {
         error.APIForbidden => .{
             .status = .forbidden,
             .code = "forbidden",
+        },
+        // strange error: during a service, the user was available previously
+        error.APIUserNotFound => .{
+            .status = .not_found,
+            .code = "user_not_found",
         },
         error.APIInvalidFlightLogEntryId => .{
             .status = .bad_request,
