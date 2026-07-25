@@ -37,6 +37,7 @@ pub fn put(
         arena,
         &ctx.db,
         r,
+        ctx.production_mode,
     )) orelse return APIError.APIUnauthenticated;
 
     const request_body = r.body orelse return APIError.APIInvalidRequest;

@@ -27,6 +27,7 @@ pub fn requireUserIdOrCreateAnonymous(
     allocator: Allocator,
     db: *Db,
     r: zap.Request,
+    production_mode: bool,
 ) !i64 {
     const token_cookie: ?[]const u8 = try r.getCookieStr(allocator, session_cookie_name);
 
@@ -40,10 +41,15 @@ pub fn requireUserIdOrCreateAnonymous(
         }
     }
 
-    return createAnonymousUserIdAndSetSession(io, allocator, db, r);
+    return createAnonymousUserIdAndSetSession(io, allocator, db, r, production_mode);
 }
 
-pub fn getUserIdOrNull(allocator: Allocator, db: *Db, r: zap.Request) !?i64 {
+pub fn getUserIdOrNull(
+    allocator: Allocator,
+    db: *Db,
+    r: zap.Request,
+    production_mode: bool,
+) !?i64 {
     const token: []const u8 = try r.getCookieStr(
         allocator,
         session_cookie_name,
@@ -54,14 +60,19 @@ pub fn getUserIdOrNull(allocator: Allocator, db: *Db, r: zap.Request) !?i64 {
         db,
         token,
     ) orelse {
-        try clearSessionToken(r);
+        try clearSessionToken(r, production_mode);
         return null;
     };
 
     return user_id;
 }
 
-pub fn requireAdmin(allocator: Allocator, db: *Db, r: zap.Request) !i64 {
+pub fn requireAdmin(
+    allocator: Allocator,
+    db: *Db,
+    r: zap.Request,
+    production_mode: bool,
+) !i64 {
     const token: []const u8 = (try r.getCookieStr(
         allocator,
         session_cookie_name,
@@ -72,7 +83,7 @@ pub fn requireAdmin(allocator: Allocator, db: *Db, r: zap.Request) !i64 {
         db,
         token,
     )) orelse {
-        try clearSessionToken(r);
+        try clearSessionToken(r, production_mode);
         return APIError.APIUnauthenticated;
     };
 
@@ -82,7 +93,7 @@ pub fn requireAdmin(allocator: Allocator, db: *Db, r: zap.Request) !i64 {
         user_id,
     ) catch |err| switch (err) {
         user_service.AuthorizationError.UserNotFound => {
-            try clearSessionToken(r);
+            try clearSessionToken(r, production_mode);
             return APIError.APIUserNotFound;
         },
         else => return err,
@@ -101,6 +112,7 @@ pub fn setSessionForAccount(
     db: *Db,
     r: zap.Request,
     user_id: i64,
+    production_mode: bool,
 ) !void {
     const new_session_token = try user_session_service.createSession(
         io,
@@ -114,30 +126,36 @@ pub fn setSessionForAccount(
         r,
         new_session_token,
         password_session_max_age_s,
+        production_mode,
     );
 }
 
-pub fn clearSessionToken(r: zap.Request) !void {
+pub fn clearSessionToken(r: zap.Request, production_mode: bool) !void {
     try r.setCookie(.{
         .name = session_cookie_name,
         .value = "",
         .path = "/",
         .max_age_s = 0,
         .http_only = true,
-        .secure = false, // TODO: set to true in production
-        .same_site = .Lax, // TODO: set to .Strict in production
+        .secure = production_mode,
+        .same_site = if (production_mode) .Strict else .Lax,
     });
 }
 
-fn setSessionToken(r: zap.Request, new_token: SessionTokenRandomHex, max_age_s: i32) !void {
+fn setSessionToken(
+    r: zap.Request,
+    new_token: SessionTokenRandomHex,
+    max_age_s: i32,
+    production_mode: bool,
+) !void {
     try r.setCookie(.{
         .name = session_cookie_name,
         .value = new_token[0..],
         .path = "/",
         .max_age_s = max_age_s,
         .http_only = true,
-        .secure = false, // TODO: set to true in production
-        .same_site = .Lax, // TODO: set to .Strict in production
+        .secure = production_mode,
+        .same_site = if (production_mode) .Strict else .Lax,
     });
 }
 
@@ -146,6 +164,7 @@ fn createAnonymousUserIdAndSetSession(
     allocator: Allocator,
     db: *Db,
     r: zap.Request,
+    production_mode: bool,
 ) !i64 {
     const session_context = try user_session_service.createAnonymousSession(
         io,
@@ -157,6 +176,7 @@ fn createAnonymousUserIdAndSetSession(
         r,
         session_context.new_session_token,
         cookie_session_max_age_s,
+        production_mode,
     );
     return session_context.user_id;
 }

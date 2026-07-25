@@ -36,6 +36,7 @@ pub fn get(
         arena,
         &ctx.db,
         r,
+        ctx.production_mode,
     );
 
     const entries = try flight_log_service.listAll(
@@ -83,6 +84,7 @@ pub fn post(
         arena,
         &ctx.db,
         r,
+        ctx.production_mode,
     );
 
     const content = switch (validation_domain.sanitizeContent(parsed.value.content)) {

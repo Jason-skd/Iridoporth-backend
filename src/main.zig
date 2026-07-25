@@ -36,6 +36,7 @@ pub fn main(init: std.process.Init) !void {
         gpa_allocator,
         init.io,
         config.db_path,
+        config.production_mode,
     );
     defer app_context.deinit();
 
@@ -68,6 +69,7 @@ const Config = struct {
     public_folder: ?[]const u8,
     port: usize,
     db_path: []const u8,
+    production_mode: bool,
 };
 
 fn loadConfig(init: std.process.Init) !Config {
@@ -75,15 +77,26 @@ fn loadConfig(init: std.process.Init) !Config {
     const port_text = init.environ_map.get("IRIDOPORTH_PORT") orelse "3000";
     const port = try std.fmt.parseInt(usize, port_text, 10);
     const db_path = init.environ_map.get("IRIDOPORTH_DB_PATH") orelse "./data/iridoporth.db";
+    const production_mode = std.mem.eql(
+        u8,
+        init.environ_map.get("IRIDOPORTH_PRODUCTION") orelse "false",
+        "true",
+    );
 
     return .{
         .public_folder = public_folder,
         .port = port,
         .db_path = db_path,
+        .production_mode = production_mode,
     };
 }
 
-fn initContext(allocator: Allocator, io: std.Io, db_path: []const u8) !Context {
+fn initContext(
+    allocator: Allocator,
+    io: std.Io,
+    db_path: []const u8,
+    production_mode: bool,
+) !Context {
     const db_path_sentinel = try allocator.dupeSentinel(
         u8,
         db_path,
@@ -91,7 +104,12 @@ fn initContext(allocator: Allocator, io: std.Io, db_path: []const u8) !Context {
     );
     defer allocator.free(db_path_sentinel);
 
-    return try Context.init(io, allocator, db_path_sentinel);
+    return try Context.init(
+        io,
+        allocator,
+        db_path_sentinel,
+        production_mode,
+    );
 }
 
 fn startDetachedStatusSampler(ctx: *Context) !void {
