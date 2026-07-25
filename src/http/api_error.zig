@@ -4,6 +4,7 @@ pub const Error = error{
     APIInvalidRequest,
     APINotFound,
     APIUnauthenticated,
+    APIInvalidCredentials,
     APIForbidden,
     APIUserNotFound,
     APIInvalidFlightLogEntryId,
@@ -25,6 +26,10 @@ pub fn classify(err: anyerror) ?PublicError {
         error.APIUnauthenticated => .{
             .status = .unauthorized,
             .code = "unauthenticated",
+        },
+        error.APIInvalidCredentials => .{
+            .status = .unauthorized,
+            .code = "invalid_credentials",
         },
         error.APIForbidden => .{
             .status = .forbidden,

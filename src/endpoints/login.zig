@@ -67,7 +67,7 @@ pub fn post(
             );
         },
         .failure => {
-            return APIError.APIUnauthenticated;
+            return APIError.APIInvalidCredentials;
         },
     }
 }

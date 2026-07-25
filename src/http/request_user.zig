@@ -15,6 +15,12 @@ const user_session_service = @import("../services/user_session.zig");
 
 const user_service = @import("../services/user.zig");
 
+const user_domain = @import("../domain/user.zig");
+const User = user_domain.User;
+const UserRole = user_domain.Role;
+
+const user_repository = @import("../repositories/user.zig");
+
 const api_error = @import("./api_error.zig");
 const APIError = api_error.Error;
 
@@ -106,6 +112,57 @@ pub fn requireAdmin(
     return user_id;
 }
 
+pub const AccountSession = struct {
+    id: i64,
+    name: []const u8,
+    email: []const u8,
+    role: UserRole,
+
+    pub fn fromUser(user: User) ?AccountSession {
+        return switch (user.kind) {
+            .anonymous => null,
+            .account => |acct| .{
+                .id = user.id,
+                .name = acct.name,
+                .email = acct.email,
+                .role = user.role,
+            },
+        };
+    }
+};
+
+pub fn requireAccount(
+    allocator: Allocator,
+    db: *Db,
+    r: zap.Request,
+    production_mode: bool,
+) !AccountSession {
+    const token: []const u8 = (try r.getCookieStr(
+        allocator,
+        session_cookie_name,
+    )) orelse return APIError.APIUnauthenticated;
+
+    const user_id = (try user_session_service.findUserId(
+        allocator,
+        db,
+        token,
+    )) orelse {
+        try clearSessionToken(r, production_mode);
+        return APIError.APIUnauthenticated;
+    };
+
+    const user = (try user_repository.findUserById(
+        allocator,
+        db,
+        user_id,
+    )) orelse {
+        try clearSessionToken(r, production_mode);
+        return APIError.APIUserNotFound;
+    };
+
+    return AccountSession.fromUser(user) orelse return APIError.APIForbidden;
+}
+
 pub fn setSessionForAccount(
     io: std.Io,
     allocator: Allocator,
@@ -179,4 +236,34 @@ fn createAnonymousUserIdAndSetSession(
         production_mode,
     );
     return session_context.user_id;
+}
+
+test "AccountSession.fromUser projects an account user" {
+    const user: User = .{
+        .id = 42,
+        .kind = .{ .account = .{ .email = "a@b.com", .name = "Alice" } },
+        .role = .admin,
+        .created_at = 0,
+        .updated_at = 0,
+        .last_seen_at = 0,
+        .disabled_at = null,
+    };
+    const acct = AccountSession.fromUser(user) orelse return error.TestUnexpectedResult;
+    try std.testing.expectEqual(@as(i64, 42), acct.id);
+    try std.testing.expectEqualStrings("a@b.com", acct.email);
+    try std.testing.expectEqualStrings("Alice", acct.name);
+    try std.testing.expect(acct.role == .admin);
+}
+
+test "AccountSession.fromUser returns null for an anonymous user" {
+    const user: User = .{
+        .id = 7,
+        .kind = .anonymous,
+        .role = .user,
+        .created_at = 0,
+        .updated_at = 0,
+        .last_seen_at = 0,
+        .disabled_at = null,
+    };
+    try std.testing.expect(AccountSession.fromUser(user) == null);
 }

@@ -9,5 +9,7 @@ test {
 
     _ = @import("domain/validation.zig");
 
+    _ = @import("domain/user.zig");
+
     _ = @import("services/user.zig");
 }

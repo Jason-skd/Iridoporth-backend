@@ -33,12 +33,12 @@ pub fn put(
 ) !void {
     r.parseCookies(false);
 
-    const user_id = (try request_user_http.getUserIdOrNull(
+    const account = try request_user_http.requireAccount(
         arena,
         &ctx.db,
         r,
         ctx.production_mode,
-    )) orelse return APIError.APIUnauthenticated;
+    );
 
     const request_body = r.body orelse return APIError.APIInvalidRequest;
     const parsed = std.json.parseFromSlice(
@@ -58,11 +58,11 @@ pub fn put(
         ctx.io,
         arena,
         &ctx.db,
-        user_id,
+        account.id,
         parsed.value.current_password,
         parsed.value.new_password,
     ) catch |err| switch (err) {
-        user_service.PasswordError.InvalidCurrent => return APIError.APIUnauthenticated,
+        user_service.PasswordError.InvalidCurrent => return APIError.APIInvalidCredentials,
         user_service.PasswordError.UserNotFound => return APIError.APIUserNotFound,
         else => return err,
     };

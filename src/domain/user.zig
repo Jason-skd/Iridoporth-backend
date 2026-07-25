@@ -1,3 +1,5 @@
+const std = @import("std");
+
 pub const User = struct {
     id: i64,
     kind: Kind,
