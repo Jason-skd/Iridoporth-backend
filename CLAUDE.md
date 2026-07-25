@@ -56,7 +56,7 @@ This is the thing most likely to trip you up. **Endpoints never send error respo
 
 1. Every endpoint sets `error_strategy = .raise`, and `App.init` sets `.default_error_strategy = .raise`. A handler `return`s an error value (or propagates one) instead of catching it.
 2. The error bubbles to **`Context.unhandledError`**, which calls `http/api_error.classify(err)`:
-   - errors in the `api_error.Error` set (e.g. `APIInvalidRequest`, `APINotFound`, `APIUnauthenticated`, `APIForbidden`, `APIUserNotFound`, `APIInvalidFlightLogEntryId`, `APIFlightLogNotFound`) → mapped to a `PublicError{ status, code }` and sent as `{ "ok": false, "error": { "code": "..." } }`;
+   - errors in the `api_error.Error` set (e.g. `APIInvalidRequest`, `APINotFound`, `APIUnauthenticated`, `APIInvalidCredentials`, `APIForbidden`, `APIUserNotFound`, `APIInvalidFlightLogEntryId`, `APIFlightLogNotFound`) → mapped to a `PublicError{ status, code }` and sent as `{ "ok": false, "error": { "code": "..." } }`;
    - anything unrecognized → `internal_error` (500).
 3. So to add a new HTTP-facing failure: add an `API*` variant to `api_error.Error`, add a `classify` arm with status + code, and `return APIError.APIXxx` from the endpoint. Recent commits ("add error set for each layer", "uniform to error strategy") established this — **follow it for new code**.
 
@@ -70,7 +70,7 @@ The method selects the handler within a route: `GET base` lists visible entries,
 
 ### Auth & sessions
 
-- Identity is an HTTP-only cookie `session_token` (see `http/request_user.zig`). Three entry points: `getUserIdOrNull` (read), `requireUserIdOrCreateAnonymous` (write — lazily creates an anonymous user + 91-day session on first write), `requireAdmin` (admin gate → `APIUnauthenticated`/`APIForbidden`/`APIUserNotFound`).
+- Identity is an HTTP-only cookie `session_token` (see `http/request_user.zig`). Four entry points: `getUserIdOrNull` (read — returns `null` on missing/expired/revoked, clearing the cookie), `requireUserIdOrCreateAnonymous` (write — lazily creates an anonymous user + 91-day session on first write), `requireAdmin` (admin gate → `APIUnauthenticated`/`APIForbidden`/`APIUserNotFound`), and `requireAccount` (any logged-in *account* user — rejects anonymous-cookie sessions with `APIForbidden`, returns an `AccountSession{id,name,email,role}`; this is the gate for `PUT /api/v1/account/password`).
 - Anonymous-cookie sessions last 91 days; password-login sessions 1 day.
 - Tokens are 32 random bytes (`io.randomSecure`) → hex; stored only as **SHA-256 hex** (`hashSessionToken`). Lookup is by hash.
 - Passwords: argon2id (`argon2.Params.owasp_2id`) via `std.crypto.pwhash.argon2`.
@@ -82,7 +82,7 @@ The method selects the handler within a route: `GET base` lists visible entries,
 Beyond anonymous-cookie identity there is a full account/admin layer (added after the original error-strategy refactor):
 
 - **Bootstrap admin uses hardcoded default credentials.** `main.zig` calls `user_service.ensureAdminAccount` on every startup with the constants `admin@example.com` / `Admin` / `Admin0001`. It is idempotent: if a user with that email already exists it returns early and **never overwrites the password**, so changing the default via the account API persists across restarts. A real default admin account is auto-created in every environment — assume it exists; the DB never starts empty of admins.
-- **Login & password change.** `POST /api/v1/login` (email+password → 1-day `password_login` session via `request_user_http.setSessionForAccount`); `PUT /api/v1/account/password` changes the logged-in user's password after verifying the current one (`user_service.changePassword`, errors `PasswordError.InvalidCurrent` / `UserNotFound` mapped to `APIUnauthenticated` / `APIUserNotFound`). Hash/verify is argon2id in `domain/login.zig`.
+- **Login & password change.** `POST /api/v1/login` (email+password → 1-day `password_login` session via `request_user_http.setSessionForAccount`); a login *failure* (`login_service.login` → `.failure`, i.e. unknown email or wrong password) is `APIInvalidCredentials` (401, `invalid_credentials`). `PUT /api/v1/account/password` changes the logged-in user's password after verifying the current one (`user_service.changePassword`, errors `PasswordError.InvalidCurrent` / `UserNotFound` mapped to `APIInvalidCredentials` / `APIUserNotFound`). Hash/verify is argon2id in `domain/login.zig`.
 - **Admin gate.** `requireAdmin` resolves the session then checks `users.role == 'admin'` (`user_service.isAdmin`): valid-but-non-admin → `APIForbidden`; session whose user vanished → `APIUserNotFound` (and clears the cookie).
 - **Admin list.** `GET /api/v1/flight-log/admin` → `listAllForAdmin`, returning `FlightLogAdminEntryDTO` (adds `deleted_at`/`hidden_at`) — i.e. entries the public list hides.
 - **Soft-delete vs. hidden are two distinct states** on `flight_log_entries`: `deleted_at` (set by the entry's *creator* via `PATCH {is_deleted:true}`) and `hidden_at` (set by an *admin* via `PATCH {is_hidden:true}`). Neither is a physical delete; the public list filters out both, the admin list shows all. Preserve this distinction when touching list queries.
