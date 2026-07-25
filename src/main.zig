@@ -39,9 +39,12 @@ pub fn main(init: std.process.Init) !void {
     );
     defer app_context.deinit();
 
+    var bootstrap_arena = std.heap.ArenaAllocator.init(gpa_allocator);
+    defer bootstrap_arena.deinit();
+
     try user_service.ensureAdminAccount(
         app_context.io,
-        gpa_allocator,
+        bootstrap_arena.allocator(),
         &app_context.db,
         bootstrap_admin_email,
         bootstrap_admin_name,

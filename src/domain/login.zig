@@ -7,20 +7,22 @@ pub const LoginResult = union(enum) {
     failure: void,
 };
 
-pub fn hashPassword(io: std.Io, allocator: Allocator, password: []const u8) ![]const u8 {
-    var buf: [128]u8 = undefined;
-    const password_hash = try argon2.strHash(
+pub fn hashPassword(
+    io: std.Io,
+    allocator: Allocator,
+    password: []const u8,
+    out: *[128]u8,
+) ![]const u8 {
+    return argon2.strHash(
         password,
         .{
             .allocator = allocator,
             .params = argon2.Params.owasp_2id,
             .mode = .argon2id,
         },
-        &buf,
+        out,
         io,
     );
-
-    return allocator.dupe(u8, password_hash);
 }
 
 pub fn verifyPassword(

@@ -50,10 +50,12 @@ pub fn changePassword(
     );
     if (!current_ok) return PasswordError.InvalidCurrent;
 
+    var buf: [128]u8 = undefined;
     const new_hash = try login_domain.hashPassword(
         io,
         allocator,
         new_password,
+        &buf,
     );
 
     const updated = try user_repository.setPasswordHash(
@@ -76,9 +78,27 @@ pub fn ensureAdminAccount(
     // Already provisioned — leave it (and its password) untouched.
     if (try user_repository.findUserByEmail(allocator, db, email) != null) return;
 
-    const admin = try user_repository.createAdmin(io, allocator, db, email, name);
-    const password_hash = try login_domain.hashPassword(io, allocator, password);
-    _ = try user_repository.setPasswordHash(io, db, admin.id, password_hash);
+    const admin = try user_repository.createAdmin(
+        io,
+        allocator,
+        db,
+        email,
+        name,
+    );
+
+    var buf: [128]u8 = undefined;
+    const password_hash = try login_domain.hashPassword(
+        io,
+        allocator,
+        password,
+        &buf,
+    );
+    _ = try user_repository.setPasswordHash(
+        io,
+        db,
+        admin.id,
+        password_hash,
+    );
 }
 
 test "ensureAdminAccount creates an admin on first call" {
