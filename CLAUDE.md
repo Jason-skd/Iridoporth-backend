@@ -56,7 +56,7 @@ This is the thing most likely to trip you up. **Endpoints never send error respo
 
 1. Every endpoint sets `error_strategy = .raise`, and `App.init` sets `.default_error_strategy = .raise`. A handler `return`s an error value (or propagates one) instead of catching it.
 2. The error bubbles to **`Context.unhandledError`**, which calls `http/api_error.classify(err)`:
-   - errors in the `api_error.Error` set (e.g. `APIInvalidRequest`, `APINotFound`, `APIUnauthenticated`, `APIForbidden`, `APIInvalidFlightLogEntryId`, `APIFlightLogNotFound`) → mapped to a `PublicError{ status, code }` and sent as `{ "ok": false, "error": { "code": "..." } }`;
+   - errors in the `api_error.Error` set (e.g. `APIInvalidRequest`, `APINotFound`, `APIUnauthenticated`, `APIForbidden`, `APIUserNotFound`, `APIInvalidFlightLogEntryId`, `APIFlightLogNotFound`) → mapped to a `PublicError{ status, code }` and sent as `{ "ok": false, "error": { "code": "..." } }`;
    - anything unrecognized → `internal_error` (500).
 3. So to add a new HTTP-facing failure: add an `API*` variant to `api_error.Error`, add a `classify` arm with status + code, and `return APIError.APIXxx` from the endpoint. Recent commits ("add error set for each layer", "uniform to error strategy") established this — **follow it for new code**.
 
@@ -64,16 +64,29 @@ Each lower layer also keeps its own typed error set rather than reusing the API 
 
 ### Routing is hand-rolled
 
-Zap matches by path prefix per endpoint, with no built-in path params. `endpoints/flight_log/dispatcher.zig` parses the suffix itself into a `Route` union (`base` / `entry{entry_id}` / `entry_like{entry_id}`) and dispatches to `base_path.zig`, `entry.zig`, `like.zig`. `parseRoute` distinguishes `not_found` vs `invalid_entry_id` so each maps to the right `API*` error via `RouteParseResult.strip()`. There are table-driven tests for the parser — extend them when adding routes.
+Zap matches by path prefix per endpoint, with no built-in path params. `endpoints/flight_log/dispatcher.zig` parses the suffix itself into a `Route` union (`base` / `admin` / `entry{entry_id}` / `entry_like{entry_id}`) and dispatches per HTTP method to `base_path.zig`, `admin.zig`, `entry.zig`, `like.zig`. `parseRoute` distinguishes `not_found` vs `invalid_entry_id` so each maps to the right `API*` error via `RouteParseResult.strip()`. There are table-driven tests for the parser — extend them when adding routes.
+
+The method selects the handler within a route: `GET base` lists visible entries, `POST base` creates one, `GET admin` is the admin list, `POST`/`DELETE entry_like` toggles a like, and **`PATCH entry` is the single mutation/moderation surface**. `PATCH /api/v1/flight-log/{id}` takes a `FlightLogPatchRequest` and `entry.zig`'s `parseAction` requires **exactly one** of `is_deleted` / `is_hidden` / `response` / `clear_response` to be set — any other combination (zero, multiple, or `is_deleted:false`) is `APIInvalidRequest`. Auth depends on the action: `delete` is creator-scoped (anonymous-or-account), while `hide` / `unhide` / `respond` / `clear_response` require admin; `respond` runs the body through `validation_domain.sanitizeContent`. Repository calls return `bool` (row touched) and a `false` becomes `APIFlightLogNotFound`. `parseAction` has table-driven tests — extend them when adding an action.
 
 ### Auth & sessions
 
-- Identity is an HTTP-only cookie `session_token` (see `http/request_user.zig`). Three entry points: `getUserIdOrNull` (read), `requireUserIdOrCreateAnonymous` (write — lazily creates an anonymous user + 91-day session on first write), `requireAdmin` (admin gate → `APIUnauthenticated`/`APIForbidden`).
+- Identity is an HTTP-only cookie `session_token` (see `http/request_user.zig`). Three entry points: `getUserIdOrNull` (read), `requireUserIdOrCreateAnonymous` (write — lazily creates an anonymous user + 91-day session on first write), `requireAdmin` (admin gate → `APIUnauthenticated`/`APIForbidden`/`APIUserNotFound`).
 - Anonymous-cookie sessions last 91 days; password-login sessions 1 day.
 - Tokens are 32 random bytes (`io.randomSecure`) → hex; stored only as **SHA-256 hex** (`hashSessionToken`). Lookup is by hash.
 - Passwords: argon2id (`argon2.Params.owasp_2id`) via `std.crypto.pwhash.argon2`.
 - One row per `(user_id)` is enforced by `idx_user_sessions_user_id`; session validity is filtered in SQL (`revoked_at IS NULL AND expires_at > strftime('%s','now')`).
-- Cookie flags currently have `secure: false`, `same_site: .Lax` with `// TODO: set to true/.Strict in production` — don't silently "fix" these without noting the production intent.
+- Cookie flags are driven by `IRIDOPORTH_PRODUCTION` (see Environment below): unset / not `"true"` → `secure=false`, `same_site=.Lax` (dev); `"true"` → `secure=true`, `same_site=.Strict` (production). The flag is threaded as a `production_mode: bool` param from `Context.production_mode` down through `http/request_user.zig`'s cookie helpers (`setSessionToken`, `clearSessionToken`).
+
+### Admin, accounts & moderation
+
+Beyond anonymous-cookie identity there is a full account/admin layer (added after the original error-strategy refactor):
+
+- **Bootstrap admin uses hardcoded default credentials.** `main.zig` calls `user_service.ensureAdminAccount` on every startup with the constants `admin@example.com` / `Admin` / `Admin0001`. It is idempotent: if a user with that email already exists it returns early and **never overwrites the password**, so changing the default via the account API persists across restarts. A real default admin account is auto-created in every environment — assume it exists; the DB never starts empty of admins.
+- **Login & password change.** `POST /api/v1/login` (email+password → 1-day `password_login` session via `request_user_http.setSessionForAccount`); `PUT /api/v1/account/password` changes the logged-in user's password after verifying the current one (`user_service.changePassword`, errors `PasswordError.InvalidCurrent` / `UserNotFound` mapped to `APIUnauthenticated` / `APIUserNotFound`). Hash/verify is argon2id in `domain/login.zig`.
+- **Admin gate.** `requireAdmin` resolves the session then checks `users.role == 'admin'` (`user_service.isAdmin`): valid-but-non-admin → `APIForbidden`; session whose user vanished → `APIUserNotFound` (and clears the cookie).
+- **Admin list.** `GET /api/v1/flight-log/admin` → `listAllForAdmin`, returning `FlightLogAdminEntryDTO` (adds `deleted_at`/`hidden_at`) — i.e. entries the public list hides.
+- **Soft-delete vs. hidden are two distinct states** on `flight_log_entries`: `deleted_at` (set by the entry's *creator* via `PATCH {is_deleted:true}`) and `hidden_at` (set by an *admin* via `PATCH {is_hidden:true}`). Neither is a physical delete; the public list filters out both, the admin list shows all. Preserve this distinction when touching list queries.
+- **Input validation lives in `domain/validation.zig`.** `sanitizeContent` trims + enforces 1–300 codepoints; `validatePassword` requires 8–128 ASCII chars, no whitespace; `validateLength` is the shared codepoint counter (rejects invalid UTF-8). Reuse these for any new user-facing text/password field instead of ad-hoc checks.
 
 ### raspi status runs on a background thread
 
@@ -98,6 +111,7 @@ Tests live inline in the relevant layer file (`repositories/*`, `services/*`, en
 | `IRIDOPORTH_PORT` | `3000` | HTTP port |
 | `IRIDOPORTH_DB_PATH` | `./data/iridoporth.db` | SQLite file (`main.zig` creates `./data/`) |
 | `IRIDOPORTH_PUBLIC_DIR` | unset | Optional static-file root passed to zap |
+| `IRIDOPORTH_PRODUCTION` | unset | When exactly `"true"`, switches session cookies to production mode: `secure=true`, `same_site=Strict`. Unset / any other value → dev mode (`secure=false`, `same_site=Lax`). |
 
 ## Docker / CI
 

@@ -20,7 +20,12 @@ const response_http = @import("http/response.zig");
 
 pub const Context = @This();
 
-pub fn init(io: std.Io, allocator: Allocator, db_path: [:0]const u8) !Context {
+pub fn init(
+    io: std.Io,
+    allocator: Allocator,
+    db_path: [:0]const u8,
+    production_mode: bool,
+) !Context {
     var raspi = raspi_status_service.init(io, allocator);
     errdefer raspi.deinit(allocator);
 
@@ -31,6 +36,7 @@ pub fn init(io: std.Io, allocator: Allocator, db_path: [:0]const u8) !Context {
         .allocator = allocator,
         .raspi = raspi,
         .db = db,
+        .production_mode = production_mode,
     };
 }
 
@@ -43,6 +49,7 @@ io: std.Io,
 allocator: Allocator,
 raspi: Raspi,
 db: Db,
+production_mode: bool,
 
 pub fn unhandledRequest(_: *Context, _: Allocator, r: zap.Request) anyerror!void {
     try response_http.sendPublicError(r, api_error.not_found);

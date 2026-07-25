@@ -96,6 +96,7 @@ pub fn patch(
                 arena,
                 &ctx.db,
                 r,
+                ctx.production_mode,
             );
 
             success = try flight_log_repository.delete(
@@ -110,6 +111,7 @@ pub fn patch(
                 arena,
                 &ctx.db,
                 r,
+                ctx.production_mode,
             );
 
             success = try flight_log_repository.hide(
@@ -123,6 +125,7 @@ pub fn patch(
                 arena,
                 &ctx.db,
                 r,
+                ctx.production_mode,
             );
 
             success = try flight_log_repository.unhide(
@@ -135,6 +138,7 @@ pub fn patch(
                 arena,
                 &ctx.db,
                 r,
+                ctx.production_mode,
             );
 
             const content = switch (validation_domain.sanitizeContent(
@@ -156,6 +160,7 @@ pub fn patch(
                 arena,
                 &ctx.db,
                 r,
+                ctx.production_mode,
             );
 
             success = try flight_log_repository.clearResponse(

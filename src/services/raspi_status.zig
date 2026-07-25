@@ -21,9 +21,9 @@ pub fn init(io: std.Io, allocator: Allocator) Raspi {
         std.debug.print("get raspi name: {}\n", .{err});
         return .unavailable;
     };
+    errdefer allocator.free(raspi_name);
     const raspi_status = checkStatus(io) catch |err| {
         std.debug.print("check raspi status: {}\n", .{err});
-        allocator.free(raspi_name);
         return .unavailable;
     };
     return .{ .available = .{

@@ -36,6 +36,7 @@ pub fn post(
         arena,
         &ctx.db,
         r,
+        ctx.production_mode,
     );
 
     const success = try flight_log_repository.like(
@@ -75,6 +76,7 @@ pub fn delete(
         arena,
         &ctx.db,
         r,
+        ctx.production_mode,
     );
 
     const success = try flight_log_repository.unlike(

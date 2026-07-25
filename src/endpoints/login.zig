@@ -55,6 +55,7 @@ pub fn post(
                 &ctx.db,
                 r,
                 user_id,
+                ctx.production_mode,
             );
             const response: LoginResponse = .{ .data = .{ .success = true } };
             try response_http.stringifyAndSendResponse(
