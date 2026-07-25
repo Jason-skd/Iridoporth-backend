@@ -44,8 +44,8 @@ pub const FlightLogPostResponse = struct { ok: bool = true, data: struct {
 pub const FlightLogActionResponse = struct { ok: bool = true, data: struct {} };
 
 pub const FlightLogPatchRequest = struct {
-    is_deleted: ?bool,
-    is_hidden: ?bool,
-    response: ?[]const u8,
-    clear_response: ?bool,
+    is_deleted: ?bool = null,
+    is_hidden: ?bool = null,
+    response: ?[]const u8 = null,
+    clear_response: ?bool = null,
 };
