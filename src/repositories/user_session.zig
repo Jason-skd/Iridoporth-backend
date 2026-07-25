@@ -65,6 +65,13 @@ fn insertUserSession(
     const query = (
         \\INSERT INTO user_sessions (user_id, method, token_hash, created_at, expires_at, last_used_at, revoked_at)
         \\VALUES (:user_id{i64}, :method{[]const u8}, :token_hash{[]const u8}, :created_at{i64}, :expires_at{i64}, :last_used_at{i64}, :revoked_at{?i64})
+        \\ON CONFLICT(user_id) DO UPDATE SET
+        \\  method = excluded.method,
+        \\  token_hash = excluded.token_hash,
+        \\  created_at = excluded.created_at,
+        \\  expires_at = excluded.expires_at,
+        \\  last_used_at = excluded.last_used_at,
+        \\  revoked_at = excluded.revoked_at
         \\RETURNING session_id
     );
     var stmt = try db.prepare(query);
