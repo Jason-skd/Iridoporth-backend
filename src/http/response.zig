@@ -51,7 +51,7 @@ fn sendStaticJson(
     status: std.http.Status,
     body: []const u8,
 ) !void {
-    r.setStatusNumeric(@intFromEnum(status));
+    r.setStatusNumeric(@backingInt(status));
     try r.setHeader("Content-Type", "application/json; charset=utf-8");
     try r.sendBody(body);
 }

@@ -1,0 +1,20 @@
+# Lefthook git hooks config — https://github.com/evilmartians/lefthook
+# Activate once per clone with:  lefthook install
+# Manual dry-run:                 lefthook run pre-commit
+
+pre-commit:
+  # Run fmt -> build -> test in order; stop on the first failure so a
+  # format violation doesn't also pay for a build + test cycle.
+  parallel: false
+  commands:
+    fmt:
+      # Skipped entirely unless at least one staged file is a *.zig file,
+      # so docs-only commits go straight through.
+      glob: "*.zig"
+      run: zig fmt --check src/
+    build:
+      glob: "*.zig"
+      run: zig build
+    test:
+      glob: "*.zig"
+      run: zig build test --summary all

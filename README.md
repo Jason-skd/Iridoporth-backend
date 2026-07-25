@@ -194,7 +194,17 @@ zig build -Doptimize=ReleaseSafe           # Release 构建
 zig build -Dtarget=aarch64-linux-gnu -Doptimize=ReleaseSafe   # 交叉编译（树莓派/Linux）
 ```
 
-产物位于 `zig-out/bin/Iridoporth_backend`。`-Dtest-filter` 在 `build.zig` 中已接好；测试根是 `src/tests.zig`（新增含测试的模块要在那里 `@import`，否则不会跑）。**CI 不跑 `zig build test`**，提交前请本地跑一遍。
+产物位于 `zig-out/bin/Iridoporth_backend`。`-Dtest-filter` 在 `build.zig` 中已接好；测试根是 `src/tests.zig`（新增含测试的模块要在那里 `@import`，否则不会跑）。
+
+### 提交前检查（lefthook）
+
+仓库根的 `lefthook.yml` 配了 `pre-commit` 钩子。clone 后执行一次 `lefthook install` 激活（钩子脚本在 `.git/` 下，不入版本控制）。此后每次提交，只要有 `*.zig` 文件被暂存，就会按顺序跑：
+
+1. `zig fmt --check src/` —— Zig 没有独立 linter，编译器在 `build` 时已做静态分析，`fmt` 负责风格。它还会自动应用跨版本 builtin 改名（如 `@intFromEnum` → `@backingInt`）；失败时跑 `zig fmt src/` 修，别手改。
+2. `zig build` —— 编译通过。
+3. `zig build test --summary all` —— 全部内联测试通过。
+
+三条串行、任一失败即中止。`zig-out/` 与 `.zig-cache/` 已 gitignore，钩子里的 `zig build` 不会产生多余暂存改动。**CI 不跑测试**，由这个本地钩子把关。
 
 ## Docker / 部署
 

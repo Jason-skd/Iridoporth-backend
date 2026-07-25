@@ -19,6 +19,16 @@ zig build -Dtarget=aarch64-linux-gnu -Doptimize=ReleaseSafe   # cross-compile (r
 
 Binary lands in `zig-out/bin/Iridoporth_backend`. The `-Dtest-filter` option is wired up in `build.zig`; VS Code's Zig plugin is already configured to use it (`zig testArgs` in `.vscode/settings.json`).
 
+### Pre-commit (lefthook)
+
+`lefthook.yml` gates every commit. Run `lefthook install` once after cloning (the hook script lives under `.git/`, so it isn't tracked). The `pre-commit` hook runs, **in order, stopping on the first failure**, but only when at least one staged file matches `*.zig` (docs/config-only commits skip straight through):
+
+1. `zig fmt --check src/` — Zig has no standalone linter (no `cargo clippy` equivalent); the compiler does all static analysis during `build`, and `zig fmt` is the style gate. `zig fmt` also auto-applies cross-version builtin renames (e.g. `@intFromEnum` → `@backingInt`), so committed code uses the current names — to fix a failure run `zig fmt src/`, don't fight it.
+2. `zig build` — compiles cleanly.
+3. `zig build test --summary all` — all inline tests pass.
+
+`zig-out/` and `.zig-cache/` are gitignored, so `zig build` in the hook leaves no stray staged changes.
+
 ### Zig version
 
 The toolchain is a **Zig 0.17 dev build** (`0.17.0-dev.*`). Code uses the new 0.17 APIs throughout — do not reach for pre-0.17 patterns:
@@ -117,6 +127,6 @@ Tests live inline in the relevant layer file (`repositories/*`, `services/*`, en
 
 Two-stage build: `Dockerfile.zig` produces a `local/zig:0.17` builder image; `Dockerfile` uses it to cross-compile `aarch64-linux-gnu` ReleaseSafe onto `debian:bookworm-slim`. `docker compose up --build` runs backend + an alpine sidecar that just `touch`es the db file (666) on a named volume + a frontend (expected at sibling `../Iridoporth-frontend`).
 
-CI (`.github/workflows/docker.yml`) runs on `ubuntu-24.04-arm`, builds both images, and pushes to `ghcr.io/jason-skd/iridoporth-backend` (+ a `-zig` builder) on pushes to `main` and `v*.*.*` tags. **CI does not run `zig build test`** — tests are local-only; run them before pushing.
+CI (`.github/workflows/docker.yml`) runs on `ubuntu-24.04-arm`, builds both images, and pushes to `ghcr.io/jason-skd/iridoporth-backend` (+ a `-zig` builder) on pushes to `main` and `v*.*.*` tags. **CI does not run `zig build test`** — tests are local-only, enforced by the lefthook `pre-commit` hook (see above) rather than by CI.
 
 `docs/TODO.md` tracks open architectural questions (migrate INTEGER ids to TEXT, better migration wrapper, replace deprecated `DebugAllocator`, engineering-grade error handling) — check it before redesigning anything in those areas.
