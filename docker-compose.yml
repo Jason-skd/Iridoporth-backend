@@ -17,7 +17,8 @@ services:
       - iridoporth-db:/var/lib/iridoporth
     depends_on:
       - db
-    restart: unless-stopped
+    ports:
+      - "3000:3000"
 
   db:
     image: alpine:3.19
@@ -25,7 +26,6 @@ services:
     command: [ "sh", "-c", "mkdir -p /var/lib/iridoporth && touch /var/lib/iridoporth/iridoporth.db && chmod 666 /var/lib/iridoporth/iridoporth.db && sleep infinity" ]
     volumes:
       - iridoporth-db:/var/lib/iridoporth
-    restart: unless-stopped
 
   frontend:
     build:

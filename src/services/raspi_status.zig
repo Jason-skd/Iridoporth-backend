@@ -17,19 +17,7 @@ const CpuStatParseError = error{
 };
 
 pub fn init(io: std.Io, allocator: Allocator) Raspi {
-    const raspi_name = getName(allocator) catch |err| {
-        std.debug.print("get raspi name: {}\n", .{err});
-        return .unavailable;
-    };
-    errdefer allocator.free(raspi_name);
-    const raspi_status = checkStatus(io) catch |err| {
-        std.debug.print("check raspi status: {}\n", .{err});
-        return .unavailable;
-    };
-    return .{ .available = .{
-        .name = raspi_name,
-        .status = raspi_status,
-    } };
+    return initOrFaile(io, allocator) catch .unavailable;
 }
 
 pub fn runStatusSampler(ctx: *Context) void {
@@ -37,8 +25,24 @@ pub fn runStatusSampler(ctx: *Context) void {
         ctx,
     ) catch |err| {
         std.debug.print("status sampling: {}\n", .{err});
-        ctx.raspi = Raspi.unavailable;
+        ctx.raspi.deinit(ctx.allocator);
     };
+}
+
+fn initOrFaile(io: std.Io, allocator: Allocator) !Raspi {
+    const raspi_name = getName(allocator) catch |err| {
+        std.debug.print("get raspi name: {}\n", .{err});
+        return err;
+    };
+    errdefer allocator.free(raspi_name);
+    const raspi_status = checkStatus(io) catch |err| {
+        std.debug.print("check raspi status: {}\n", .{err});
+        return err;
+    };
+    return .{ .available = .{
+        .name = raspi_name,
+        .status = raspi_status,
+    } };
 }
 
 fn getName(allocator: Allocator) ![]u8 {
